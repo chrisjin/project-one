@@ -10,9 +10,13 @@ const TERMINAL_SCORE := 1_000_000
 const MIN_SCORE := -2_000_000_000
 const MAX_SCORE := 2_000_000_000
 
-const ANCHOR_BASE_VALUE := 28
-const ANCHOR_HP_VALUE := 7
-const ACTIVE_ANCHOR_BONUS := 5
+const ANCHOR_BASE_VALUE := 50
+const ANCHOR_HP_VALUE := 20
+const ACTIVE_ANCHOR_BONUS := 10
+const MAIN_ANCHOR_HP_VALUE_PER_BOUND_BOARD_PIECE := 8
+const ANCHOR_ATTACK_THREAT_PENALTY := 40
+const LETHAL_ANCHOR_THREAT_PENALTY := 80
+const ANCHOR_THREAT_PENALTY_PER_BOUND_BOARD_PIECE := 25
 const BOARD_PIECE_BASE_VALUE := 120
 const BOARD_PIECE_HP_VALUE := 12
 const MATURE_BOARD_PIECE_BONUS := 5
@@ -26,7 +30,7 @@ var search_depth: int
 var max_actions_per_node: int
 
 
-func _init(engine = null, depth: int = 2, action_limit: int = 16) -> void:
+func _init(engine = null, depth: int = 3, action_limit: int = 8) -> void:
 	rules_engine = engine if engine != null else RulesEngine.new()
 	search_depth = maxi(1, depth)
 	max_actions_per_node = maxi(2, action_limit)
@@ -142,11 +146,25 @@ func _contains_action(candidates: Array[Dictionary], expected_action) -> bool:
 
 func _side_value(state, player: RuleTypes.Player) -> int:
 	var value := 0
+	var bound_board_piece_counts: Dictionary = {}
+	for board_piece in state.board_pieces.values():
+		if board_piece.player == player:
+			bound_board_piece_counts[board_piece.main_anchor_id] = int(
+				bound_board_piece_counts.get(board_piece.main_anchor_id, 0)
+			) + 1
+	var anchor_threat_damage := _anchor_threat_damage(state, player)
 	for anchor in state.anchors.values():
 		if anchor.player != player:
 			continue
+		var bound_count: int = bound_board_piece_counts.get(anchor.id, 0)
 		value += ANCHOR_BASE_VALUE + anchor.hp * ANCHOR_HP_VALUE
 		value += ACTIVE_ANCHOR_BONUS if anchor.is_active else 0
+		value += anchor.hp * bound_count * MAIN_ANCHOR_HP_VALUE_PER_BOUND_BOARD_PIECE
+		if anchor_threat_damage.has(anchor.id):
+			value -= ANCHOR_ATTACK_THREAT_PENALTY
+			value -= bound_count * ANCHOR_THREAT_PENALTY_PER_BOUND_BOARD_PIECE
+			if int(anchor_threat_damage[anchor.id]) >= anchor.hp:
+				value -= LETHAL_ANCHOR_THREAT_PENALTY
 	for board_piece in state.board_pieces.values():
 		if board_piece.player != player:
 			continue
@@ -160,6 +178,22 @@ func _side_value(state, player: RuleTypes.Player) -> int:
 		var liberty_count: int = rules_engine.compute_liberties(state, group).size()
 		value += mini(liberty_count, MAX_SCORED_LIBERTIES_PER_GROUP) * LIBERTY_VALUE
 	return value
+
+
+func _anchor_threat_damage(state, defending_player: RuleTypes.Player) -> Dictionary:
+	var threat_damage: Dictionary = {}
+	var attacking_player := RuleTypes.opponent(defending_player)
+	for threat: Dictionary in rules_engine.compute_attack_threats(state, attacking_player):
+		var target: Dictionary = threat.target
+		if target.kind != RuleTypes.EntityKind.ANCHOR or not state.anchors.has(target.id):
+			continue
+		if state.anchors[target.id].player != defending_player:
+			continue
+		threat_damage[target.id] = maxi(
+			int(threat_damage.get(target.id, 0)),
+			int(threat.damage)
+		)
+	return threat_damage
 
 
 func _choice_key(action) -> String:

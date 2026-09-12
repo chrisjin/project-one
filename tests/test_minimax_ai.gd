@@ -6,11 +6,12 @@ const MapDefinition = preload("res://scripts/gameplay/map_definition.gd")
 const Anchor = preload("res://scripts/gameplay/anchor_state.gd")
 const BoardPiece = preload("res://scripts/gameplay/board_piece_state.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
+const RulesConfig = preload("res://scripts/gameplay/rules_config.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
 const MinimaxAi = preload("res://scripts/ai/minimax_ai.gd")
 
 var engine := RulesEngine.new()
-var ai := MinimaxAi.new(engine, 2, 16)
+var ai := MinimaxAi.new(engine)
 var failures: Array[String] = []
 var assertion_count := 0
 
@@ -21,6 +22,7 @@ func run_all() -> bool:
 	test_only_legal_turn_transition_is_returned()
 	test_coordinates_have_no_intrinsic_value()
 	test_rule_connections_improve_evaluation()
+	test_damaged_main_anchor_is_defended()
 	test_headless_ai_sequence_is_reproducible()
 	if failures.is_empty():
 		print("PASS: %d minimax-AI assertions" % assertion_count)
@@ -110,6 +112,45 @@ func test_rule_connections_improve_evaluation() -> void:
 	_assert_true(
 		ai.evaluate_state(dual_protected, RuleTypes.Player.BLACK) > ai.evaluate_state(secondary_disconnected, RuleTypes.Player.BLACK),
 		"AI values valid dual-Anchor protection"
+	)
+
+
+func test_damaged_main_anchor_is_defended() -> void:
+	var state = engine.new_game(MapDefinition.rectangular(5, 3, true))
+	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(4, 1), 1)
+	_add_piece(state, 10, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(2, 0), 1)
+	_add_piece(state, 11, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(3, 0), 1)
+	_add_piece(state, 12, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(4, 0), 1)
+	for board_piece_id in [10, 11, 12]:
+		state.board_pieces[board_piece_id].is_mature = false
+	state.anchors_deployed[RuleTypes.Player.BLACK] = RulesConfig.ANCHOR_DEPLOYMENT_LIMIT
+	_add_anchor(state, 2, RuleTypes.Player.WHITE, Vector2i(0, 0))
+	_add_piece(state, 2, RuleTypes.Player.WHITE, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 1), 2)
+	state.seen_state_hashes.clear()
+	state.seen_state_hashes[engine.state_hash(state)] = true
+	_assert_equal(
+		engine.trace_ray(state, 2, Vector2i.RIGHT).target.id,
+		1,
+		"fixture starts with the damaged Main Anchor exposed to a lethal ray"
+	)
+
+	var actions_taken := 0
+	while state.current_player == RuleTypes.Player.BLACK and actions_taken < 2:
+		var action = ai.choose_action(state)
+		var result = engine.apply_action(state, action)
+		_assert_true(result.success, "defensive AI turn uses exact legal engine actions")
+		if not result.success:
+			return
+		state = result.state
+		actions_taken += 1
+	_assert_equal(state.current_player, RuleTypes.Player.WHITE, "defensive AI completes its turn")
+	_assert_true(state.anchors.has(1), "damaged Main Anchor survives the AI's defensive turn")
+	var reply_target: Dictionary = engine.trace_ray(state, 2, Vector2i.RIGHT).target
+	_assert_false(
+		not reply_target.is_empty()
+			and reply_target.kind == RuleTypes.EntityKind.ANCHOR
+			and reply_target.id == 1,
+		"AI breaks or blocks the opponent's lethal Main Anchor ray"
 	)
 
 

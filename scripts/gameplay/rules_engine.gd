@@ -109,6 +109,28 @@ func trace_ray(state: GameState, board_piece_id: int, direction: Vector2i) -> Di
 	return result
 
 
+func compute_attack_threats(state: GameState, attacking_player: RuleTypes.Player) -> Array[Dictionary]:
+	# This turn-independent query lets headless controllers inspect exact attack rays.
+	var threats: Array[Dictionary] = []
+	if state.is_game_over:
+		return threats
+	for board_piece_id: int in _sorted_int_keys(state.board_pieces):
+		var attacker: BoardPiece = state.board_pieces[board_piece_id]
+		if attacker.player != attacking_player or attacker.hp <= 0 or not attacker.is_mature:
+			continue
+		for direction: Vector2i in RuleTypes.board_piece_directions(attacker.board_piece_type):
+			var ray := trace_ray(state, board_piece_id, direction)
+			if ray.target.is_empty():
+				continue
+			threats.append({
+				"attacker_id": board_piece_id,
+				"direction": direction,
+				"target": ray.target.duplicate(),
+				"damage": _attack_damage_to_target(state, ray.target),
+			})
+	return threats
+
+
 func compute_supply(state: GameState, board_piece_id: int) -> bool:
 	if not state.board_pieces.has(board_piece_id):
 		return false
@@ -472,11 +494,9 @@ func _attack(state: GameState, action: GameplayAction, events: Array[Dictionary]
 		return "The attack ray does not reach an enemy board entity."
 
 	var target: Dictionary = ray.target
-	var actual_damage := RulesConfig.BOARD_PIECE_ATTACK
+	var actual_damage := _attack_damage_to_target(state, target)
 	if target.kind == RuleTypes.EntityKind.BOARD_PIECE:
 		var target_piece: BoardPiece = state.board_pieces[target.id]
-		if compute_unit_chain_connection(state, target_piece.id):
-			actual_damage = maxi(0, actual_damage - RulesConfig.MAIN_ANCHOR_DAMAGE_REDUCTION)
 		target_piece.hp = maxi(0, target_piece.hp - actual_damage)
 	else:
 		var target_anchor: Anchor = state.anchors[target.id]
@@ -488,6 +508,14 @@ func _attack(state: GameState, action: GameplayAction, events: Array[Dictionary]
 		"damage": actual_damage,
 	})
 	return ""
+
+
+func _attack_damage_to_target(state: GameState, target: Dictionary) -> int:
+	var damage := RulesConfig.BOARD_PIECE_ATTACK
+	if target.kind == RuleTypes.EntityKind.BOARD_PIECE \
+			and compute_unit_chain_connection(state, target.id):
+		damage = maxi(0, damage - RulesConfig.MAIN_ANCHOR_DAMAGE_REDUCTION)
+	return damage
 
 
 func _rapid_activation(state: GameState, action: GameplayAction, events: Array[Dictionary]) -> String:

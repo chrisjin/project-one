@@ -65,7 +65,7 @@ var _ai_generation := 0
 
 
 func _ready() -> void:
-	minimax_ai = MinimaxAi.new(rules_engine, 2, 16)
+	minimax_ai = MinimaxAi.new(rules_engine)
 	var camera_target := Vector3(camera.position.x, 0.0, camera.position.z)
 	camera.look_at(camera_target, Vector3(0.0, 0.0, -1.0))
 	hud.mode_requested.connect(_on_mode_requested)
