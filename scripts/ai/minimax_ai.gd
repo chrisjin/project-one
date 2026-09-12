@@ -10,6 +10,17 @@ const TERMINAL_SCORE := 1_000_000
 const MIN_SCORE := -2_000_000_000
 const MAX_SCORE := 2_000_000_000
 
+const ANCHOR_BASE_VALUE := 28
+const ANCHOR_HP_VALUE := 7
+const ACTIVE_ANCHOR_BONUS := 5
+const BOARD_PIECE_BASE_VALUE := 120
+const BOARD_PIECE_HP_VALUE := 12
+const MATURE_BOARD_PIECE_BONUS := 5
+const DAMAGE_REDUCTION_BONUS := 18
+const DUAL_ANCHOR_PROTECTION_BONUS := 20
+const LIBERTY_VALUE := 2
+const MAX_SCORED_LIBERTIES_PER_GROUP := 6
+
 var rules_engine
 var search_depth: int
 var max_actions_per_node: int
@@ -134,25 +145,21 @@ func _side_value(state, player: RuleTypes.Player) -> int:
 	for anchor in state.anchors.values():
 		if anchor.player != player:
 			continue
-		value += 28 + anchor.hp * 7
-		value += 5 if anchor.is_active else 0
-		value += _centrality_value(state, anchor.cell)
+		value += ANCHOR_BASE_VALUE + anchor.hp * ANCHOR_HP_VALUE
+		value += ACTIVE_ANCHOR_BONUS if anchor.is_active else 0
 	for board_piece in state.board_pieces.values():
 		if board_piece.player != player:
 			continue
-		value += 120 + board_piece.hp * 12
-		value += 5 if board_piece.is_mature else 0
-		value += _centrality_value(state, board_piece.cell) / 2
+		value += BOARD_PIECE_BASE_VALUE + board_piece.hp * BOARD_PIECE_HP_VALUE
+		value += MATURE_BOARD_PIECE_BONUS if board_piece.is_mature else 0
+		if rules_engine.compute_unit_chain_connection(state, board_piece.id):
+			value += DAMAGE_REDUCTION_BONUS
+		if rules_engine.has_dual_anchor_protection(state, board_piece.id):
+			value += DUAL_ANCHOR_PROTECTION_BONUS
+	for group: Dictionary in rules_engine.compute_friendly_groups(state, player):
+		var liberty_count: int = rules_engine.compute_liberties(state, group).size()
+		value += mini(liberty_count, MAX_SCORED_LIBERTIES_PER_GROUP) * LIBERTY_VALUE
 	return value
-
-
-func _centrality_value(state, cell: Vector2i) -> int:
-	var center := Vector2(
-		float(state.map_definition.width - 1) * 0.5,
-		float(state.map_definition.height - 1) * 0.5
-	)
-	var distance := absf(float(cell.x) - center.x) + absf(float(cell.y) - center.y)
-	return maxi(0, roundi(10.0 - distance))
 
 
 func _choice_key(action) -> String:

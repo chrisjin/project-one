@@ -19,6 +19,8 @@ func run_all() -> bool:
 	test_deterministic_legal_opening()
 	test_immediate_material_win_is_preferred()
 	test_only_legal_turn_transition_is_returned()
+	test_coordinates_have_no_intrinsic_value()
+	test_rule_connections_improve_evaluation()
 	test_headless_ai_sequence_is_reproducible()
 	if failures.is_empty():
 		print("PASS: %d minimax-AI assertions" % assertion_count)
@@ -66,6 +68,49 @@ func test_only_legal_turn_transition_is_returned() -> void:
 	var action = ai.choose_action(state)
 	_assert_equal(action.kind, GameplayAction.Kind.END_TURN, "AI returns End Turn when it is the only legal action")
 	_assert_true(engine.apply_action(state, action).success, "forced AI turn transition is engine-approved")
+
+
+func test_coordinates_have_no_intrinsic_value() -> void:
+	var off_center = engine.new_game(MapDefinition.rectangular(7, 7, true))
+	_add_anchor(off_center, 1, RuleTypes.Player.BLACK, Vector2i(1, 1))
+	var center = engine.new_game(MapDefinition.rectangular(7, 7, true))
+	_add_anchor(center, 1, RuleTypes.Player.BLACK, Vector2i(3, 3))
+	_assert_equal(
+		ai.evaluate_state(off_center, RuleTypes.Player.BLACK),
+		ai.evaluate_state(center, RuleTypes.Player.BLACK),
+		"equally free cells have equal value regardless of distance from board center"
+	)
+
+
+func test_rule_connections_improve_evaluation() -> void:
+	var unit_chain = engine.new_game(MapDefinition.rectangular(5, 3, true))
+	_add_anchor(unit_chain, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_piece(unit_chain, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 1), 1)
+	var empty_supply_path = engine.new_game(MapDefinition.rectangular(5, 3, true))
+	_add_anchor(empty_supply_path, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_piece(empty_supply_path, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(2, 1), 1)
+	_assert_true(engine.compute_supply(empty_supply_path, 1), "comparison BoardPiece has Supply through empty terrain")
+	_assert_false(engine.compute_unit_chain_connection(empty_supply_path, 1), "empty Supply path does not grant damage reduction")
+	_assert_true(engine.compute_unit_chain_connection(unit_chain, 1), "adjacent friendly chain grants engine damage reduction")
+	_assert_true(
+		ai.evaluate_state(unit_chain, RuleTypes.Player.BLACK) > ai.evaluate_state(empty_supply_path, RuleTypes.Player.BLACK),
+		"AI values Main Anchor unit-chain damage reduction"
+	)
+
+	var dual_protected = engine.new_game(MapDefinition.rectangular(5, 3, true))
+	_add_anchor(dual_protected, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_piece(dual_protected, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 1), 1)
+	_add_anchor(dual_protected, 2, RuleTypes.Player.BLACK, Vector2i(2, 1))
+	var secondary_disconnected = engine.new_game(MapDefinition.rectangular(5, 3, true))
+	_add_anchor(secondary_disconnected, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_piece(secondary_disconnected, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 1), 1)
+	_add_anchor(secondary_disconnected, 2, RuleTypes.Player.BLACK, Vector2i(4, 1))
+	_assert_true(engine.has_dual_anchor_protection(dual_protected, 1), "connected distinct active Anchor Cluster grants protection")
+	_assert_false(engine.has_dual_anchor_protection(secondary_disconnected, 1), "disconnected Anchor Cluster grants no protection")
+	_assert_true(
+		ai.evaluate_state(dual_protected, RuleTypes.Player.BLACK) > ai.evaluate_state(secondary_disconnected, RuleTypes.Player.BLACK),
+		"AI values valid dual-Anchor protection"
+	)
 
 
 func test_headless_ai_sequence_is_reproducible() -> void:
