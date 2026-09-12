@@ -24,6 +24,9 @@ func _run() -> void:
 	var hud = game.get_node("DebugHud")
 	var camera: Camera3D = game.get_node("Camera3D")
 	_assert_equal(hud.get_node("DebugCanvas").mouse_filter, Control.MOUSE_FILTER_IGNORE, "full-screen HUD layout leaves board-plane clicks unhandled")
+	_assert_equal(camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "debug camera uses an orthographic top-down projection")
+	var camera_forward := -camera.global_transform.basis.z.normalized()
+	_assert_true(camera_forward.dot(Vector3.DOWN) > 0.999, "debug camera looks straight down at the board")
 	_assert_equal(game.game_state.map_definition.width, 7, "new UI match uses the standard board width")
 	_assert_equal(game.game_state.map_definition.height, 7, "new UI match uses the standard board height")
 	for y in range(7):
@@ -33,6 +36,10 @@ func _run() -> void:
 			var mouse_position := camera.unproject_position(board_view.cell_to_world(cell))
 			_assert_equal(board_view.pick_cell(camera, mouse_position), cell, "camera ray picks projected cell %s" % cell)
 	_assert_equal(_named_child_count(board_view.get_node("BoardGeometry"), "Cell_"), 49, "all 49 standard cells render")
+	var first_tile: MeshInstance3D = board_view.get_node("BoardGeometry/Cell_0_0")
+	_assert_true(first_tile.material_override.albedo_color.b > first_tile.material_override.albedo_color.r, "board cells use a light-blue material")
+	var grid_backing: MeshInstance3D = board_view.get_node("BoardGeometry/GridBacking")
+	_assert_true(grid_backing.material_override.albedo_color.get_luminance() < 0.1, "cell gaps reveal a near-black grid backing")
 
 	game._on_placement_requested(-1)
 	_assert_equal(game.cell_actions.size(), 25, "Anchor placement highlights come from the 25 legal engine actions")

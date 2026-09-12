@@ -24,9 +24,10 @@ light_energy = 1.25
 shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-position = Vector3(10.3, 12.6, 11)
+position = Vector3(0.8, 12, -2)
 current = true
-fov = 47.0
+projection = 1
+size = 13.5
 
 [node name="BoardView" type="Node3D" parent="."]
 script = ExtResource("2_board")

@@ -35,7 +35,8 @@ var status_message := ""
 
 
 func _ready() -> void:
-	camera.look_at(Vector3.ZERO, Vector3.UP)
+	var camera_target := Vector3(camera.position.x, 0.0, camera.position.z)
+	camera.look_at(camera_target, Vector3(0.0, 0.0, -1.0))
 	hud.mode_requested.connect(_on_mode_requested)
 	hud.placement_requested.connect(_on_placement_requested)
 	hud.end_turn_requested.connect(_on_end_turn_requested)

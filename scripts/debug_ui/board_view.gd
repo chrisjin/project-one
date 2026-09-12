@@ -89,9 +89,21 @@ func pick_cell(camera: Camera3D, mouse_position: Vector2) -> Vector2i:
 
 func _rebuild_board() -> void:
 	_clear_children(_board_root)
-	var light_tile := _make_material(Color("d8d2c0"))
-	var dark_tile := _make_material(Color("aaa48f"))
-	var edge_material := _make_material(Color("4b5361"))
+	var light_tile := _make_material(Color("cce8f7"))
+	var dark_tile := _make_material(Color("b7d8ec"))
+	var edge_material := _make_material(Color("10151d"))
+	var grid_backing := MeshInstance3D.new()
+	grid_backing.name = "GridBacking"
+	var backing_mesh := BoxMesh.new()
+	backing_mesh.size = Vector3(
+		float(map_definition.width) * CELL_SIZE + 0.25,
+		0.10,
+		float(map_definition.height) * CELL_SIZE + 0.25
+	)
+	grid_backing.mesh = backing_mesh
+	grid_backing.material_override = edge_material
+	grid_backing.position.y = -0.13
+	_board_root.add_child(grid_backing)
 	for y in range(map_definition.height):
 		for x in range(map_definition.width):
 			var cell := Vector2i(x, y)
@@ -234,7 +246,7 @@ func _inactive_material(player: RuleTypes.Player) -> StandardMaterial3D:
 
 
 func _label_color(player: RuleTypes.Player) -> Color:
-	return Color("a9c7ff") if player == RuleTypes.Player.BLACK else Color("fff4ca")
+	return Color("a9c7ff") if player == RuleTypes.Player.BLACK else Color("51472f")
 
 
 func _make_material(color: Color, emissive: bool = false) -> StandardMaterial3D:
