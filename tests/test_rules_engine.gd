@@ -162,6 +162,10 @@ func test_secondary_anchor_protection() -> void:
 	_assert_true(stable.board_pieces.has(1), "a mature supplied 0-HP BoardPiece survives with an active distinct Secondary cluster")
 	_assert_equal(engine.secondary_anchor_cluster_ids(stable, 1), [2], "Secondary protection exposes a stable cluster ID")
 	_assert_true(engine.compute_unit_chain_connection(stable, 1), "the BoardPiece remains connected to its physical Main Anchor")
+	_assert_true(engine.board_piece_debug(stable, 1).zero_hp_protection_valid, "debug data exposes legal 0-HP protection")
+	var anchor_debug = engine.anchor_debug(stable, 1)
+	_assert_equal(anchor_debug.bound_board_piece_ids, [1], "Anchor debug data exposes bound BoardPiece IDs")
+	_assert_equal(anchor_debug.binding_capacity, 3, "Anchor debug data exposes physical binding capacity")
 
 	var same_cluster = _fixture_state(3, 2)
 	_add_anchor(same_cluster, 1, RuleTypes.Player.BLACK, Vector2i(0, 0), true)

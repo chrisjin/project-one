@@ -265,6 +265,7 @@ func board_piece_debug(state: GameState, board_piece_id: int) -> Dictionary:
 	return {
 		"board_piece_id": board_piece.id,
 		"board_piece_type": board_piece.board_piece_type,
+		"owner": board_piece.player,
 		"hp": board_piece.hp,
 		"is_mature": board_piece.is_mature,
 		"main_anchor_id": board_piece.main_anchor_id,
@@ -274,6 +275,7 @@ func board_piece_debug(state: GameState, board_piece_id: int) -> Dictionary:
 		"damage_reduction_active": compute_unit_chain_connection(state, board_piece_id),
 		"secondary_anchor_cluster_ids": secondary_anchor_cluster_ids(state, board_piece_id),
 		"dual_anchor_protection": has_dual_anchor_protection(state, board_piece_id),
+		"zero_hp_protection_valid": board_piece.hp <= 0 and has_dual_anchor_protection(state, board_piece_id),
 		"friendly_group_id": group_data.id,
 		"liberty_count": group_data.liberty_count,
 	}
@@ -286,16 +288,20 @@ func anchor_debug(state: GameState, anchor_id: int) -> Dictionary:
 	var clusters := compute_anchor_clusters(state, anchor.player)
 	var cluster_index := _cluster_index_containing(clusters, anchor_id)
 	var group_data := _group_debug_data(state, RuleTypes.EntityKind.ANCHOR, anchor_id)
-	var bound_count := 0
+	var bound_board_piece_ids: Array[int] = []
 	for board_piece: BoardPiece in state.board_pieces.values():
 		if board_piece.main_anchor_id == anchor_id:
-			bound_count += 1
+			bound_board_piece_ids.append(board_piece.id)
+	bound_board_piece_ids.sort()
 	return {
 		"anchor_id": anchor.id,
+		"owner": anchor.player,
 		"hp": anchor.hp,
 		"is_active": anchor.is_active,
 		"anchor_cluster_id": clusters[cluster_index][0] if cluster_index >= 0 else -1,
-		"bound_board_piece_count": bound_count,
+		"bound_board_piece_ids": bound_board_piece_ids,
+		"bound_board_piece_count": bound_board_piece_ids.size(),
+		"binding_capacity": RulesConfig.ANCHOR_BINDING_CAPACITY,
 		"deployment_index": anchor.deployment_index,
 		"zero_liberty": group_data.liberty_count == 0,
 		"protected_group_membership": group_data.has_protected_board_piece,

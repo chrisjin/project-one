@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/debug_ui/debug_game_controller.gd" id="1_controller"]
+[ext_resource type="Script" path="res://scripts/debug_ui/board_view.gd" id="2_board"]
+[ext_resource type="Script" path="res://scripts/debug_ui/debug_hud.gd" id="3_hud"]
+
+[sub_resource type="Environment" id="Environment_debug"]
+background_mode = 1
+background_color = Color(0.105, 0.12, 0.15, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.72, 0.77, 0.86, 1)
+ambient_light_energy = 0.75
+
+[node name="DebugGame" type="Node3D"]
+script = ExtResource("1_controller")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_debug")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, -28, 0)
+light_color = Color(0.96, 0.92, 0.82, 1)
+light_energy = 1.25
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(10.3, 12.6, 11)
+current = true
+fov = 47.0
+
+[node name="BoardView" type="Node3D" parent="."]
+script = ExtResource("2_board")
+
+[node name="DebugHud" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
