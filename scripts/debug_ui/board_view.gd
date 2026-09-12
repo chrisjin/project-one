@@ -1,4 +1,4 @@
-## Stateless 3D projection of GameState plus engine-approved interaction highlights.
+## 3D projection of GameState, engine-approved highlights, and selected Anchor bindings.
 class_name AnchorDebugBoardView
 extends Node3D
 
@@ -10,18 +10,26 @@ const BOARD_SURFACE_Y := 0.0
 var map_definition
 var _map_signature := ""
 var _board_root: Node3D
+var _binding_flow_root: Node3D
 var _highlight_root: Node3D
 var _entity_root: Node3D
 var _black_material: StandardMaterial3D
 var _white_material: StandardMaterial3D
 var _black_zero_hp_material: StandardMaterial3D
 var _white_zero_hp_material: StandardMaterial3D
+var _binding_dot_mesh: SphereMesh
+var _binding_dot_material: StandardMaterial3D
+var _binding_paths: Array[Dictionary] = []
+var _binding_flow_distance := 0.0
 
 
 func _ready() -> void:
 	_board_root = Node3D.new()
 	_board_root.name = "BoardGeometry"
 	add_child(_board_root)
+	_binding_flow_root = Node3D.new()
+	_binding_flow_root.name = "BindingFlow"
+	add_child(_binding_flow_root)
 	_highlight_root = Node3D.new()
 	_highlight_root.name = "Highlights"
 	add_child(_highlight_root)
@@ -32,14 +40,33 @@ func _ready() -> void:
 	_white_material = _make_material(Color("f2ead7"))
 	_black_zero_hp_material = _make_material(Color(0.15, 0.20, 0.29, 0.48), false)
 	_white_zero_hp_material = _make_material(Color(0.95, 0.91, 0.82, 0.52), false)
+	_binding_dot_mesh = SphereMesh.new()
+	_binding_dot_mesh.radius = 0.065
+	_binding_dot_mesh.height = 0.13
+	_binding_dot_mesh.radial_segments = 8
+	_binding_dot_mesh.rings = 4
+	_binding_dot_material = _make_material(Color(1.0, 0.93, 0.55, 0.94), true)
 
 
-func refresh_from_state(state, cell_highlights: Dictionary = {}, selected_entity: Dictionary = {}) -> void:
+func _process(delta: float) -> void:
+	if _binding_paths.is_empty():
+		return
+	_binding_flow_distance += delta * 0.42
+	_update_binding_flow_positions()
+
+
+func refresh_from_state(
+	state,
+	cell_highlights: Dictionary = {},
+	selected_entity: Dictionary = {},
+	binding_visual: Dictionary = {}
+) -> void:
 	map_definition = state.map_definition
 	var signature := JSON.stringify(map_definition.canonical_data())
 	if signature != _map_signature:
 		_map_signature = signature
 		_rebuild_board()
+	_render_binding_flow(state, binding_visual)
 	_clear_children(_highlight_root)
 	_clear_children(_entity_root)
 	for cell: Vector2i in cell_highlights:
@@ -50,6 +77,64 @@ func refresh_from_state(state, cell_highlights: Dictionary = {}, selected_entity
 		_render_anchor(state.anchors[anchor_id])
 	for board_piece_id: int in state.board_pieces:
 		_render_board_piece(state.board_pieces[board_piece_id])
+
+
+func _render_binding_flow(state, binding_visual: Dictionary) -> void:
+	_clear_children(_binding_flow_root)
+	_binding_paths.clear()
+	_binding_flow_distance = 0.0
+	if binding_visual.is_empty():
+		return
+	var anchor_id: int = int(binding_visual.get("anchor_id", 0))
+	if not state.anchors.has(anchor_id):
+		return
+	var anchor_position := cell_to_world(state.anchors[anchor_id].cell) + Vector3(0.0, 0.15, 0.0)
+	for board_piece_id: int in binding_visual.get("board_piece_ids", []):
+		if not state.board_pieces.has(board_piece_id):
+			continue
+		var board_piece_position := cell_to_world(state.board_pieces[board_piece_id].cell) + Vector3(0.0, 0.15, 0.0)
+		_add_binding_path(anchor_id, board_piece_id, anchor_position, board_piece_position)
+	_update_binding_flow_positions()
+
+
+func _add_binding_path(
+	anchor_id: int,
+	board_piece_id: int,
+	start: Vector3,
+	end: Vector3
+) -> void:
+	var distance := start.distance_to(end)
+	if distance <= 0.01:
+		return
+	var path_root := Node3D.new()
+	path_root.name = "Anchor_%d_To_BoardPiece_%d" % [anchor_id, board_piece_id]
+	_binding_flow_root.add_child(path_root)
+	var dot_count := maxi(3, ceili(distance / 0.34))
+	var dots: Array[MeshInstance3D] = []
+	for dot_index in range(dot_count):
+		var dot := MeshInstance3D.new()
+		dot.name = "Dot_%d" % dot_index
+		dot.mesh = _binding_dot_mesh
+		dot.material_override = _binding_dot_material
+		dot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		path_root.add_child(dot)
+		dots.append(dot)
+	_binding_paths.append({
+		"start": start,
+		"direction": start.direction_to(end),
+		"distance": distance,
+		"spacing": distance / float(dot_count),
+		"dots": dots,
+	})
+
+
+func _update_binding_flow_positions() -> void:
+	for path: Dictionary in _binding_paths:
+		var path_distance: float = path.distance
+		var dots: Array = path.dots
+		for dot_index in range(dots.size()):
+			var distance_along := fposmod(float(dot_index) * float(path.spacing) + _binding_flow_distance, path_distance)
+			dots[dot_index].position = path.start + path.direction * distance_along
 
 
 func cell_to_world(cell: Vector2i) -> Vector3:

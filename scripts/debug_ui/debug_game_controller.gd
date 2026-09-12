@@ -132,6 +132,10 @@ func _on_pass_requested() -> void:
 func _handle_cell_click(cell: Vector2i, screen_position: Vector2 = Vector2(-1.0, -1.0)) -> void:
 	if game_state.is_game_over:
 		return
+	if _should_open_context_for_different_entity(cell):
+		_exit_active_interaction()
+		_open_context_for_cell(cell, screen_position)
+		return
 	match mode:
 		Mode.PLACEMENT:
 			_handle_placement_click(cell)
@@ -141,6 +145,27 @@ func _handle_cell_click(cell: Vector2i, screen_position: Vector2 = Vector2(-1.0,
 			_handle_action_click(cell)
 		_:
 			_open_context_for_cell(cell, screen_position)
+
+
+func _should_open_context_for_different_entity(cell: Vector2i) -> bool:
+	if mode == Mode.NONE or selected_entity.is_empty() or cell_actions.has(cell):
+		return false
+	var clicked_entity: Dictionary = game_state.entity_at(cell)
+	return not clicked_entity.is_empty() \
+		and _entity_key(clicked_entity) != _entity_key(selected_entity)
+
+
+func _exit_active_interaction() -> void:
+	mode = Mode.NONE
+	placement_choice = PLACEMENT_NONE
+	selected_entity.clear()
+	selected_main_anchor_id = 0
+	cell_actions.clear()
+	source_actions.clear()
+	legal_main_anchor_ids.clear()
+	cell_highlights.clear()
+	_clear_context()
+	hud.set_active_mode(AnchorDebugHud.Mode.NONE)
 
 
 func _open_context_for_cell(cell: Vector2i, screen_position: Vector2) -> void:
@@ -322,7 +347,7 @@ func _rebuild_interaction() -> void:
 			_build_movement_interaction()
 		Mode.ACTION:
 			_build_action_interaction()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity)
+	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
 	hud.refresh(game_state, legal_actions, status_message)
 
@@ -419,7 +444,7 @@ func _refresh_all() -> void:
 	source_actions.clear()
 	legal_main_anchor_ids.clear()
 	cell_highlights.clear()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity)
+	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
 	hud.refresh(game_state, legal_actions, status_message)
 	if game_state.is_game_over:
@@ -438,7 +463,7 @@ func _inspect_cell(cell: Vector2i) -> void:
 		selected_entity = entity
 		status_message = "Inspecting %s." % _cell_name(cell)
 		_show_selected_debug()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity)
+	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.refresh(game_state, legal_actions, status_message)
 
 
@@ -448,8 +473,27 @@ func _inspect_or_reject(cell: Vector2i, message: String) -> void:
 		selected_entity = entity
 		_show_selected_debug()
 	status_message = "Illegal click: %s" % message
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity)
+	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.refresh(game_state, legal_actions, status_message)
+
+
+func _selected_binding_visual() -> Dictionary:
+	# Binding membership comes from engine diagnostics; the board only draws the supplied IDs.
+	if selected_entity.is_empty():
+		return {}
+	var anchor_id: int
+	if selected_entity.kind == RuleTypes.EntityKind.ANCHOR:
+		anchor_id = selected_entity.id
+	else:
+		var board_piece_data: Dictionary = rules_engine.board_piece_debug(game_state, selected_entity.id)
+		anchor_id = int(board_piece_data.get("main_anchor_id", 0))
+	var anchor_data: Dictionary = rules_engine.anchor_debug(game_state, anchor_id)
+	if anchor_data.is_empty():
+		return {}
+	return {
+		"anchor_id": anchor_id,
+		"board_piece_ids": anchor_data.bound_board_piece_ids.duplicate(),
+	}
 
 
 func _show_selected_debug() -> void:
