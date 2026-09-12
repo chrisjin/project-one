@@ -23,6 +23,7 @@ func run_all() -> bool:
 	test_coordinates_have_no_intrinsic_value()
 	test_rule_connections_improve_evaluation()
 	test_main_anchor_value_includes_bound_board_pieces()
+	test_underrepresented_board_piece_type_is_preferred()
 	test_damaged_main_anchor_is_defended()
 	test_late_game_branching_is_bounded()
 	test_headless_ai_sequence_is_reproducible()
@@ -130,6 +131,37 @@ func test_main_anchor_value_includes_bound_board_pieces() -> void:
 		fully_bound_value - unbound_value,
 		expected_dependency_value,
 		"Main Anchor value explicitly includes every BoardPiece lost in its death cascade"
+	)
+
+
+func test_underrepresented_board_piece_type_is_preferred() -> void:
+	var state = engine.new_game(MapDefinition.rectangular(3, 3, true))
+	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(0, 0))
+	_add_piece(state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 0), 1)
+	state.board_pieces[1].is_mature = false
+	state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
+	state.seen_state_hashes.clear()
+	state.seen_state_hashes[engine.state_hash(state)] = true
+	var action = ai.choose_action(state)
+	_assert_equal(action.kind, GameplayAction.Kind.PLACE_BOARD_PIECE, "AI uses its available Placement category for a BoardPiece")
+	_assert_equal(
+		action.board_piece_type,
+		RuleTypes.BoardPieceType.DIAGONAL,
+		"AI adds diagonal attack coverage when its existing BoardPieces are all O"
+	)
+
+	var diagonal_state = engine.new_game(MapDefinition.rectangular(3, 3, true))
+	_add_anchor(diagonal_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 0))
+	_add_piece(diagonal_state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.DIAGONAL, Vector2i(1, 0), 1)
+	diagonal_state.board_pieces[1].is_mature = false
+	diagonal_state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
+	diagonal_state.seen_state_hashes.clear()
+	diagonal_state.seen_state_hashes[engine.state_hash(diagonal_state)] = true
+	var orthogonal_action = ai.choose_action(diagonal_state)
+	_assert_equal(
+		orthogonal_action.board_piece_type,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		"AI adds orthogonal attack coverage when its existing BoardPieces are all D"
 	)
 
 

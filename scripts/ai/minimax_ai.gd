@@ -30,6 +30,7 @@ const BOARD_PIECE_HP_VALUE := 12
 const MATURE_BOARD_PIECE_BONUS := 5
 const DAMAGE_REDUCTION_BONUS := 18
 const DUAL_ANCHOR_PROTECTION_BONUS := 20
+const BOARD_PIECE_TYPE_IMBALANCE_PENALTY := 8
 const LIBERTY_VALUE := 2
 const MAX_SCORED_LIBERTIES_PER_GROUP := 6
 
@@ -191,11 +192,17 @@ func _contains_action(candidates: Array[Dictionary], expected_action) -> bool:
 func _side_value(state, player: RuleTypes.Player) -> int:
 	var value := 0
 	var bound_board_piece_counts: Dictionary = {}
+	var board_piece_type_counts := {
+		RuleTypes.BoardPieceType.ORTHOGONAL: 0,
+		RuleTypes.BoardPieceType.DIAGONAL: 0,
+	}
 	for board_piece in state.board_pieces.values():
 		if board_piece.player == player:
 			bound_board_piece_counts[board_piece.main_anchor_id] = int(
 				bound_board_piece_counts.get(board_piece.main_anchor_id, 0)
 			) + 1
+			if board_piece.hp > 0:
+				board_piece_type_counts[board_piece.board_piece_type] += 1
 	var anchor_threat_damage := _anchor_threat_damage(state, player)
 	for anchor in state.anchors.values():
 		if anchor.player != player:
@@ -211,6 +218,10 @@ func _side_value(state, player: RuleTypes.Player) -> int:
 			value += DAMAGE_REDUCTION_BONUS
 		if rules_engine.has_dual_anchor_protection(state, board_piece.id):
 			value += DUAL_ANCHOR_PROTECTION_BONUS
+	value -= absi(
+		int(board_piece_type_counts[RuleTypes.BoardPieceType.ORTHOGONAL])
+		- int(board_piece_type_counts[RuleTypes.BoardPieceType.DIAGONAL])
+	) * BOARD_PIECE_TYPE_IMBALANCE_PENALTY
 	for group: Dictionary in rules_engine.compute_friendly_groups(state, player):
 		var liberty_count: int = rules_engine.compute_liberties(state, group).size()
 		value += mini(liberty_count, MAX_SCORED_LIBERTIES_PER_GROUP) * LIBERTY_VALUE
