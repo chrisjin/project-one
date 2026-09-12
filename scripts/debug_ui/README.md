@@ -1,6 +1,6 @@
 # Playable 3D debug client
 
-Run the project from Godot or execute the project binary with `--path .`. The default scene first offers **Human vs Human**, **Human vs AI**, and **AI vs AI** on the standard board. In Human vs AI, the human controls Black.
+Run the project from Godot or execute the project binary with `--path .`. The default scene first offers **Human vs Human**, **Human vs AI as Black**, **Human vs AI as White**, and **AI vs AI** on the standard board.
 
 - Choose **Placement**, **Movement**, or **Action**, then click only engine-highlighted sources and destinations.
 - For O/D placement, click a highlighted physical Main Anchor before choosing the destination.

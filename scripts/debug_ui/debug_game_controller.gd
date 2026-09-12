@@ -30,6 +30,7 @@ enum ContextOption {
 enum MatchMode {
 	HUMAN_VS_HUMAN,
 	HUMAN_VS_AI,
+	HUMAN_VS_AI_AS_WHITE,
 	AI_VS_AI,
 }
 
@@ -124,7 +125,7 @@ func _show_match_setup() -> void:
 	selected_entity.clear()
 	selected_main_anchor_id = 0
 	_clear_context()
-	status_message = "Choose Human vs Human, Human vs AI, or AI vs AI."
+	status_message = "Choose Human vs Human, either Human vs AI side, or AI vs AI."
 	hud.set_match_mode_text("Choose match mode")
 	_refresh_all()
 	hud.show_match_setup()
@@ -715,12 +716,13 @@ func _can_accept_human_input() -> bool:
 
 func _is_ai_player(player: RuleTypes.Player) -> bool:
 	return match_mode == MatchMode.AI_VS_AI \
-		or (match_mode == MatchMode.HUMAN_VS_AI and player == RuleTypes.Player.WHITE)
+		or (match_mode == MatchMode.HUMAN_VS_AI and player == RuleTypes.Player.WHITE) \
+		or (match_mode == MatchMode.HUMAN_VS_AI_AS_WHITE and player == RuleTypes.Player.BLACK)
 
 
 func _match_mode_name() -> String:
 	match match_mode:
-		MatchMode.HUMAN_VS_AI:
+		MatchMode.HUMAN_VS_AI, MatchMode.HUMAN_VS_AI_AS_WHITE:
 			return "Human vs AI"
 		MatchMode.AI_VS_AI:
 			return "AI vs AI"
@@ -730,6 +732,8 @@ func _match_mode_name() -> String:
 func _match_mode_summary() -> String:
 	if match_mode == MatchMode.HUMAN_VS_AI:
 		return "Human vs AI  •  Black: Human  •  White: AI"
+	if match_mode == MatchMode.HUMAN_VS_AI_AS_WHITE:
+		return "Human vs AI  •  Black: AI  •  White: Human"
 	if match_mode == MatchMode.AI_VS_AI:
 		return "AI vs AI  •  Black: AI  •  White: AI"
 	return "Human vs Human"

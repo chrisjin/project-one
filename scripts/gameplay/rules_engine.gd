@@ -64,20 +64,36 @@ func replay(initial_state: GameState, records: Array) -> ActionResult:
 
 
 func get_legal_actions(state: GameState) -> Array[GameplayAction]:
+	var legal_actions: Array[GameplayAction] = []
+	for transition: Dictionary in get_legal_transitions(state):
+		legal_actions.append(transition.action)
+	return legal_actions
+
+
+func get_legal_transitions(state: GameState) -> Array[Dictionary]:
+	# Return each legal action with its already-resolved state to avoid duplicate simulation.
 	var candidates: Array[GameplayAction] = []
+	var transitions: Array[Dictionary] = []
 	if state.is_game_over:
-		return candidates
+		return transitions
 
 	candidates.append(GameplayAction.end_turn())
-	if state.categories_used.size() >= RulesConfig.MAX_CATEGORIES_PER_TURN:
-		return _filter_repetitions(state, candidates)
-	if not state.categories_used.has(RuleTypes.ActionCategory.PLACEMENT):
-		_append_placement_actions(state, candidates)
-	if not state.categories_used.has(RuleTypes.ActionCategory.MOVEMENT):
-		_append_movement_actions(state, candidates)
-	if not state.categories_used.has(RuleTypes.ActionCategory.ACTION):
-		_append_core_actions(state, candidates)
-	return _filter_repetitions(state, candidates)
+	if state.categories_used.size() < RulesConfig.MAX_CATEGORIES_PER_TURN:
+		if not state.categories_used.has(RuleTypes.ActionCategory.PLACEMENT):
+			_append_placement_actions(state, candidates)
+		if not state.categories_used.has(RuleTypes.ActionCategory.MOVEMENT):
+			_append_movement_actions(state, candidates)
+		if not state.categories_used.has(RuleTypes.ActionCategory.ACTION):
+			_append_core_actions(state, candidates)
+	for action: GameplayAction in candidates:
+		var result := apply_action(state, action)
+		if result.success:
+			transitions.append({
+				"action": action,
+				"state": result.state,
+				"events": result.events,
+			})
+	return transitions
 
 
 func trace_ray(state: GameState, board_piece_id: int, direction: Vector2i) -> Dictionary:
@@ -784,14 +800,6 @@ func _append_core_actions(state: GameState, actions: Array[GameplayAction]) -> v
 		for direction: Vector2i in RuleTypes.board_piece_directions(board_piece.board_piece_type):
 			if not trace_ray(state, board_piece_id, direction).target.is_empty():
 				actions.append(GameplayAction.attack(board_piece_id, direction))
-
-
-func _filter_repetitions(state: GameState, candidates: Array[GameplayAction]) -> Array[GameplayAction]:
-	var legal_actions: Array[GameplayAction] = []
-	for action: GameplayAction in candidates:
-		if apply_action(state, action).success:
-			legal_actions.append(action)
-	return legal_actions
 
 
 func _bound_board_piece_count(state: GameState, anchor_id: int) -> int:

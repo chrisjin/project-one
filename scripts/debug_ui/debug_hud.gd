@@ -23,6 +23,7 @@ enum Mode {
 enum MatchMode {
 	HUMAN_VS_HUMAN,
 	HUMAN_VS_AI,
+	HUMAN_VS_AI_AS_WHITE,
 	AI_VS_AI,
 }
 
@@ -274,8 +275,8 @@ func _build_match_setup(canvas: Control) -> void:
 	var panel := PanelContainer.new()
 	panel.name = "ModePanel"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-230, -190)
-	panel.size = Vector2(460, 380)
+	panel.position = Vector2(-230, -220)
+	panel.size = Vector2(460, 440)
 	_match_setup_overlay.add_child(panel)
 	var content := VBoxContainer.new()
 	content.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -288,15 +289,16 @@ func _build_match_setup(canvas: Control) -> void:
 	heading.add_theme_font_size_override("font_size", 28)
 	content.add_child(heading)
 	var explanation := Label.new()
-	explanation.text = "The AI uses deterministic headless minimax.\nHuman vs AI assigns the human player to Black."
+	explanation.text = "The AI uses deterministic headless minimax.\nChoose either side for Human vs AI."
 	explanation.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(explanation)
 
 	var human_match := _make_button("Human vs Human", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_HUMAN))
-	var computer_match := _make_button("Human vs AI  •  Human is Black", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_AI))
+	var computer_black_match := _make_button("Human vs AI  •  Play as Black", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_AI))
+	var computer_white_match := _make_button("Human vs AI  •  Play as White", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_AI_AS_WHITE))
 	var ai_match := _make_button("AI vs AI", func() -> void: match_mode_requested.emit(MatchMode.AI_VS_AI))
-	for button in [human_match, computer_match, ai_match]:
+	for button in [human_match, computer_black_match, computer_white_match, ai_match]:
 		button.custom_minimum_size = Vector2(390, 48)
 		content.add_child(button)
 

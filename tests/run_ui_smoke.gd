@@ -27,7 +27,8 @@ func _run() -> void:
 	_assert_equal(hud.get_node("DebugCanvas").mouse_filter, Control.MOUSE_FILTER_IGNORE, "full-screen HUD layout leaves board-plane clicks unhandled")
 	_assert_true(hud._match_setup_overlay.visible, "match-mode menu is shown before gameplay starts")
 	_assert_true(_find_button(hud._match_setup_overlay, "Human vs Human") != null, "match menu offers Human vs Human")
-	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Human is Black") != null, "match menu offers Human vs AI and identifies the human side")
+	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as Black") != null, "match menu offers Human vs AI as Black")
+	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as White") != null, "match menu offers Human vs AI as White")
 	_assert_true(_find_button(hud._match_setup_overlay, "AI vs AI") != null, "match menu offers AI vs AI")
 	_assert_true(hud._placement_button.disabled, "gameplay controls are locked before a match mode is selected")
 	_find_button(hud._match_setup_overlay, "Human vs Human").pressed.emit()
@@ -209,7 +210,7 @@ func _run() -> void:
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "switching selection refreshes the selected BoardPiece's full Anchor binding group")
 
 	game._show_match_setup()
-	_find_button(hud._match_setup_overlay, "Human vs AI  •  Human is Black").pressed.emit()
+	_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as Black").pressed.emit()
 	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_AI, "Human vs AI menu selection configures the match")
 	_assert_true(game._can_accept_human_input(), "Human controls Black at the start of Human vs AI")
 	game._on_pass_requested()
@@ -221,6 +222,17 @@ func _run() -> void:
 	_assert_true(ai_returned_to_human, "White AI completes its engine-driven turn")
 	_assert_true(game.game_state.action_log.size() >= 3, "Human pass and the AI turn are recorded in the shared replay log")
 	_assert_true(game._can_accept_human_input(), "controls unlock when Human vs AI returns to Black")
+
+	game._show_match_setup()
+	_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as White").pressed.emit()
+	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_AI_AS_WHITE, "Human vs AI as White configures Black as AI")
+	_assert_true(game._ai_running and not game._can_accept_human_input(), "Black AI starts automatically when the human chooses White")
+	var black_ai_reached_human: bool = await _wait_for_condition(
+		func() -> bool: return game.game_state.current_player == RuleTypes.Player.WHITE or game.game_state.is_game_over,
+		10000
+	)
+	_assert_true(black_ai_reached_human, "opening Black AI turn completes before White human input")
+	_assert_true(game._can_accept_human_input(), "controls unlock for the White human player")
 
 	game._show_match_setup()
 	_find_button(hud._match_setup_overlay, "AI vs AI").pressed.emit()

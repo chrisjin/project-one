@@ -338,6 +338,7 @@ func test_state_copy_isolation_and_anchor_limit() -> void:
 func test_legal_action_generation() -> void:
 	var state = engine.new_game()
 	var legal_actions = engine.get_legal_actions(state)
+	var legal_transitions = engine.get_legal_transitions(state)
 	var anchor_placements := 0
 	var end_turns := 0
 	for action: GameplayAction in legal_actions:
@@ -347,6 +348,14 @@ func test_legal_action_generation() -> void:
 			end_turns += 1
 	_assert_equal(anchor_placements, 25, "standard opening exposes exactly the inner 5x5 Anchor placements")
 	_assert_equal(end_turns, 1, "legal actions include ending an otherwise empty turn as a pass")
+	_assert_equal(legal_transitions.size(), legal_actions.size(), "legal transitions mirror the legal-action API")
+	_assert_equal(
+		legal_transitions[0].action.to_dictionary(),
+		legal_actions[0].to_dictionary(),
+		"legal transitions preserve deterministic action ordering"
+	)
+	_assert_equal(legal_transitions[0].state.action_log.size(), 1, "legal transitions include their resolved state")
+	_assert_equal(state.action_log.size(), 0, "legal-transition generation does not mutate its input state")
 
 
 func _fixture_state(width: int, height: int):

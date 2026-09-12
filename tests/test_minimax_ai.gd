@@ -22,7 +22,9 @@ func run_all() -> bool:
 	test_only_legal_turn_transition_is_returned()
 	test_coordinates_have_no_intrinsic_value()
 	test_rule_connections_improve_evaluation()
+	test_main_anchor_value_includes_bound_board_pieces()
 	test_damaged_main_anchor_is_defended()
+	test_late_game_branching_is_bounded()
 	test_headless_ai_sequence_is_reproducible()
 	if failures.is_empty():
 		print("PASS: %d minimax-AI assertions" % assertion_count)
@@ -115,6 +117,22 @@ func test_rule_connections_improve_evaluation() -> void:
 	)
 
 
+func test_main_anchor_value_includes_bound_board_pieces() -> void:
+	var anchor = Anchor.new(1, RuleTypes.Player.BLACK, Vector2i.ZERO, 0, 1)
+	anchor.is_active = true
+	var unbound_value: int = ai._anchor_value(anchor, 0)
+	var fully_bound_value: int = ai._anchor_value(anchor, RulesConfig.ANCHOR_BINDING_CAPACITY)
+	var expected_dependency_value: int = RulesConfig.ANCHOR_BINDING_CAPACITY * (
+		MinimaxAi.MAIN_ANCHOR_CASCADE_VALUE_PER_BOUND_BOARD_PIECE
+		+ anchor.hp * MinimaxAi.MAIN_ANCHOR_HP_VALUE_PER_BOUND_BOARD_PIECE
+	)
+	_assert_equal(
+		fully_bound_value - unbound_value,
+		expected_dependency_value,
+		"Main Anchor value explicitly includes every BoardPiece lost in its death cascade"
+	)
+
+
 func test_damaged_main_anchor_is_defended() -> void:
 	var state = engine.new_game(MapDefinition.rectangular(5, 3, true))
 	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(4, 1), 1)
@@ -151,6 +169,28 @@ func test_damaged_main_anchor_is_defended() -> void:
 			and reply_target.kind == RuleTypes.EntityKind.ANCHOR
 			and reply_target.id == 1,
 		"AI breaks or blocks the opponent's lethal Main Anchor ray"
+	)
+
+
+func test_late_game_branching_is_bounded() -> void:
+	var crowded_state = engine.new_game(MapDefinition.rectangular(7, 7, true))
+	for index in range(MinimaxAi.LATE_GAME_ENTITY_THRESHOLD):
+		var player := RuleTypes.Player.BLACK if index % 2 == 0 else RuleTypes.Player.WHITE
+		_add_anchor(crowded_state, index + 1, player, Vector2i(index % 7, index / 7))
+	_assert_equal(
+		ai._candidate_limit(crowded_state, true),
+		MinimaxAi.LATE_GAME_ROOT_ACTION_LIMIT,
+		"late-game root branching uses its deterministic reduced limit"
+	)
+	_assert_equal(
+		ai._candidate_limit(crowded_state, false),
+		MinimaxAi.LATE_GAME_CHILD_ACTION_LIMIT,
+		"late-game descendant branching uses its tighter deterministic limit"
+	)
+	_assert_equal(
+		ai._search_depth_for_state(crowded_state),
+		MinimaxAi.LATE_GAME_SEARCH_DEPTH,
+		"late-game search uses its deterministic reduced depth"
 	)
 
 
