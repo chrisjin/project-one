@@ -1124,6 +1124,8 @@ Moving one Anchor may therefore cause many bound BoardPieces to:
 
 # 14. Attack Rays and Blocking
 
+A normal attack fires **one player-selected ray** in one of the attacking BoardPiece's allowed directions, not all four directions.
+
 ## 14.1 O
 
 O attacks along:
