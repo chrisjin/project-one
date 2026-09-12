@@ -1,10 +1,13 @@
-## Local two-player interaction controller that submits only engine-approved actions.
+## Local human/AI match controller that submits only engine-approved actions.
 class_name AnchorDebugGameController
 extends Node3D
 
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
+const MinimaxAi = preload("res://scripts/ai/minimax_ai.gd")
+
+const AI_ACTION_DELAY_SECONDS := 0.18
 
 enum Mode {
 	NONE,
@@ -24,6 +27,12 @@ enum ContextOption {
 	PLACE_D_BOARD_PIECE,
 }
 
+enum MatchMode {
+	HUMAN_VS_HUMAN,
+	HUMAN_VS_AI,
+	AI_VS_AI,
+}
+
 const PLACEMENT_NONE := -2
 const PLACE_ANCHOR := -1
 const MAIN_ANCHOR_OPTION_BASE := 1000
@@ -33,6 +42,7 @@ const MAIN_ANCHOR_OPTION_BASE := 1000
 @onready var hud: AnchorDebugHud = $DebugHud
 
 var rules_engine := RulesEngine.new()
+var minimax_ai
 var game_state
 var legal_actions: Array = []
 var mode: Mode = Mode.NONE
@@ -48,24 +58,33 @@ var context_cell := Vector2i(-1, -1)
 var context_entity: Dictionary = {}
 var context_screen_position := Vector2.ZERO
 var context_action_options: Dictionary = {}
+var match_mode: MatchMode = MatchMode.HUMAN_VS_HUMAN
+var match_started := false
+var _ai_running := false
+var _ai_generation := 0
 
 
 func _ready() -> void:
+	minimax_ai = MinimaxAi.new(rules_engine, 2, 16)
 	var camera_target := Vector3(camera.position.x, 0.0, camera.position.z)
 	camera.look_at(camera_target, Vector3(0.0, 0.0, -1.0))
 	hud.mode_requested.connect(_on_mode_requested)
 	hud.placement_requested.connect(_on_placement_requested)
 	hud.end_turn_requested.connect(_on_end_turn_requested)
 	hud.pass_requested.connect(_on_pass_requested)
-	hud.restart_requested.connect(restart_match)
+	hud.restart_requested.connect(_show_match_setup)
 	hud.context_option_requested.connect(_on_context_option_requested)
+	hud.match_mode_requested.connect(_start_match)
 	restart_match()
+	_show_match_setup()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
-		restart_match()
+		_show_match_setup()
 		get_viewport().set_input_as_handled()
+		return
+	if not _can_accept_human_input():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var cell := board_view.pick_cell(camera, event.position)
@@ -75,18 +94,44 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func restart_match() -> void:
+	_ai_generation += 1
+	_ai_running = false
 	game_state = rules_engine.new_game()
 	mode = Mode.NONE
 	placement_choice = PLACEMENT_NONE
 	selected_entity.clear()
 	selected_main_anchor_id = 0
 	_clear_context()
-	status_message = "New local match. Black moves first. Click a cell or use the debug controls."
+	status_message = "New %s match. Black moves first." % _match_mode_name()
+	hud.set_match_mode_text(_match_mode_summary())
 	_refresh_all()
+	_schedule_ai_turn_if_needed()
+
+
+func _start_match(requested_mode: int) -> void:
+	match_mode = requested_mode as MatchMode
+	match_started = true
+	hud.hide_match_setup()
+	restart_match()
+
+
+func _show_match_setup() -> void:
+	_ai_generation += 1
+	_ai_running = false
+	match_started = false
+	mode = Mode.NONE
+	placement_choice = PLACEMENT_NONE
+	selected_entity.clear()
+	selected_main_anchor_id = 0
+	_clear_context()
+	status_message = "Choose Human vs Human, Human vs AI, or AI vs AI."
+	hud.set_match_mode_text("Choose match mode")
+	_refresh_all()
+	hud.show_match_setup()
 
 
 func _on_mode_requested(requested_mode: int) -> void:
-	if game_state.is_game_over:
+	if game_state.is_game_over or not _can_accept_human_input():
 		return
 	mode = requested_mode as Mode
 	placement_choice = PLACEMENT_NONE
@@ -104,7 +149,7 @@ func _on_mode_requested(requested_mode: int) -> void:
 
 
 func _on_placement_requested(requested_type: int) -> void:
-	if game_state.is_game_over:
+	if game_state.is_game_over or not _can_accept_human_input():
 		return
 	mode = Mode.PLACEMENT
 	placement_choice = requested_type
@@ -116,6 +161,8 @@ func _on_placement_requested(requested_type: int) -> void:
 
 
 func _on_end_turn_requested() -> void:
+	if not _can_accept_human_input():
+		return
 	if game_state.categories_used.is_empty():
 		_set_feedback("Use Pass when taking no actions.")
 		return
@@ -123,6 +170,8 @@ func _on_end_turn_requested() -> void:
 
 
 func _on_pass_requested() -> void:
+	if not _can_accept_human_input():
+		return
 	if not game_state.categories_used.is_empty():
 		_set_feedback("Pass is available only before using an action category.")
 		return
@@ -130,7 +179,7 @@ func _on_pass_requested() -> void:
 
 
 func _handle_cell_click(cell: Vector2i, screen_position: Vector2 = Vector2(-1.0, -1.0)) -> void:
-	if game_state.is_game_over:
+	if game_state.is_game_over or not _can_accept_human_input():
 		return
 	if _should_open_context_for_different_entity(cell):
 		_exit_active_interaction()
@@ -203,7 +252,7 @@ func _open_context_for_cell(cell: Vector2i, screen_position: Vector2) -> void:
 
 
 func _on_context_option_requested(option_id: int) -> void:
-	if game_state.is_game_over:
+	if game_state.is_game_over or not _can_accept_human_input():
 		return
 	if context_action_options.has(option_id):
 		_submit_action(context_action_options[option_id])
@@ -349,7 +398,7 @@ func _rebuild_interaction() -> void:
 			_build_action_interaction()
 	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
-	hud.refresh(game_state, legal_actions, status_message)
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
 
 func _build_placement_interaction() -> void:
@@ -410,16 +459,17 @@ func _build_action_interaction() -> void:
 				cell_highlights[target_cell] = "attack"
 
 
-func _submit_action(action) -> void:
+func _submit_action(action, is_ai_action: bool = false) -> bool:
 	if action == null:
 		_set_feedback("No legal turn transition is available.")
-		return
+		return false
 	var acting_player := _player_name(game_state.current_player)
+	var actor_label := "%s AI" % acting_player if is_ai_action else acting_player
 	var was_pass: bool = action.kind == GameplayAction.Kind.END_TURN and game_state.categories_used.is_empty()
 	var result = rules_engine.apply_action(game_state, action)
 	if not result.success:
 		_set_feedback("Engine rejected action: %s" % result.error)
-		return
+		return false
 	game_state = result.state
 	var automatically_ended_turn := _has_automatic_turn_end_event(result.events)
 	mode = Mode.NONE
@@ -430,12 +480,15 @@ func _submit_action(action) -> void:
 	if game_state.is_game_over:
 		status_message = "Game over after consecutive passes."
 	elif action.kind == GameplayAction.Kind.END_TURN:
-		status_message = "%s passed." % acting_player if was_pass else "%s ended the turn." % acting_player
+		status_message = "%s passed." % actor_label if was_pass else "%s ended the turn." % actor_label
 	elif automatically_ended_turn:
-		status_message = "%s resolved. Two categories used; %s's turn ended automatically." % [_action_name(action), acting_player]
+		status_message = "%s: %s resolved; the turn ended automatically." % [actor_label, _action_name(action)]
 	else:
-		status_message = "%s resolved successfully." % _action_name(action)
+		status_message = "%s: %s resolved." % [actor_label, _action_name(action)]
 	_refresh_all()
+	if not is_ai_action:
+		_schedule_ai_turn_if_needed()
+	return true
 
 
 func _refresh_all() -> void:
@@ -446,7 +499,7 @@ func _refresh_all() -> void:
 	cell_highlights.clear()
 	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
-	hud.refresh(game_state, legal_actions, status_message)
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 	if game_state.is_game_over:
 		hud.hide_context_menu()
 	if selected_entity.is_empty():
@@ -464,7 +517,7 @@ func _inspect_cell(cell: Vector2i) -> void:
 		status_message = "Inspecting %s." % _cell_name(cell)
 		_show_selected_debug()
 	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
-	hud.refresh(game_state, legal_actions, status_message)
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
 
 func _inspect_or_reject(cell: Vector2i, message: String) -> void:
@@ -474,7 +527,7 @@ func _inspect_or_reject(cell: Vector2i, message: String) -> void:
 		_show_selected_debug()
 	status_message = "Illegal click: %s" % message
 	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
-	hud.refresh(game_state, legal_actions, status_message)
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
 
 func _selected_binding_visual() -> Dictionary:
@@ -615,7 +668,71 @@ func _has_automatic_turn_end_event(events: Array[Dictionary]) -> bool:
 
 func _set_feedback(message: String) -> void:
 	status_message = message
-	hud.refresh(game_state, legal_actions, status_message)
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+
+
+func _schedule_ai_turn_if_needed() -> void:
+	if not match_started or game_state.is_game_over or _ai_running:
+		return
+	if not _is_ai_player(game_state.current_player):
+		return
+	_ai_running = true
+	var generation := _ai_generation
+	status_message = "%s AI is thinking…" % _player_name(game_state.current_player)
+	_refresh_all()
+	call_deferred("_run_ai_actions", generation)
+
+
+func _run_ai_actions(generation: int) -> void:
+	await get_tree().process_frame
+	while generation == _ai_generation \
+			and match_started \
+			and not game_state.is_game_over \
+			and _is_ai_player(game_state.current_player):
+		status_message = "%s AI is thinking…" % _player_name(game_state.current_player)
+		_refresh_all()
+		await get_tree().process_frame
+		var action = minimax_ai.choose_action(game_state)
+		if generation != _ai_generation or not match_started:
+			return
+		if action == null or not _submit_action(action, true):
+			status_message = "AI could not produce an engine-approved action."
+			break
+		if game_state.is_game_over or not _is_ai_player(game_state.current_player):
+			break
+		await get_tree().create_timer(AI_ACTION_DELAY_SECONDS).timeout
+	_ai_running = false
+	if generation == _ai_generation:
+		_refresh_all()
+
+
+func _can_accept_human_input() -> bool:
+	return match_started \
+		and not _ai_running \
+		and not game_state.is_game_over \
+		and not _is_ai_player(game_state.current_player)
+
+
+func _is_ai_player(player: RuleTypes.Player) -> bool:
+	return match_mode == MatchMode.AI_VS_AI \
+		or (match_mode == MatchMode.HUMAN_VS_AI and player == RuleTypes.Player.WHITE)
+
+
+func _match_mode_name() -> String:
+	match match_mode:
+		MatchMode.HUMAN_VS_AI:
+			return "Human vs AI"
+		MatchMode.AI_VS_AI:
+			return "AI vs AI"
+	return "Human vs Human"
+
+
+func _match_mode_summary() -> String:
+	if match_mode == MatchMode.HUMAN_VS_AI:
+		return "Human vs AI  •  Black: Human  •  White: AI"
+	if match_mode == MatchMode.AI_VS_AI:
+		return "AI vs AI  •  Black: AI  •  White: AI"
+	return "Human vs Human"
 
 
 func _entity_key(entity: Dictionary) -> String:

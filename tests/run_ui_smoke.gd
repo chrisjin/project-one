@@ -25,6 +25,14 @@ func _run() -> void:
 	var hud = game.get_node("DebugHud")
 	var camera: Camera3D = game.get_node("Camera3D")
 	_assert_equal(hud.get_node("DebugCanvas").mouse_filter, Control.MOUSE_FILTER_IGNORE, "full-screen HUD layout leaves board-plane clicks unhandled")
+	_assert_true(hud._match_setup_overlay.visible, "match-mode menu is shown before gameplay starts")
+	_assert_true(_find_button(hud._match_setup_overlay, "Human vs Human") != null, "match menu offers Human vs Human")
+	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Human is Black") != null, "match menu offers Human vs AI and identifies the human side")
+	_assert_true(_find_button(hud._match_setup_overlay, "AI vs AI") != null, "match menu offers AI vs AI")
+	_assert_true(hud._placement_button.disabled, "gameplay controls are locked before a match mode is selected")
+	_find_button(hud._match_setup_overlay, "Human vs Human").pressed.emit()
+	_assert_false(hud._match_setup_overlay.visible, "choosing a match mode hides the setup menu")
+	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_HUMAN, "Human vs Human selection reaches the match controller")
 	_assert_equal(camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "debug camera uses an orthographic top-down projection")
 	var camera_forward := -camera.global_transform.basis.z.normalized()
 	_assert_true(camera_forward.dot(Vector3.DOWN) > 0.999, "debug camera looks straight down at the board")
@@ -200,6 +208,35 @@ func _run() -> void:
 	_assert_true(hud._context_panel.visible and _context_button(hud, "Move") != null, "the newly clicked BoardPiece opens its normal option menu")
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "switching selection refreshes the selected BoardPiece's full Anchor binding group")
 
+	game._show_match_setup()
+	_find_button(hud._match_setup_overlay, "Human vs AI  •  Human is Black").pressed.emit()
+	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_AI, "Human vs AI menu selection configures the match")
+	_assert_true(game._can_accept_human_input(), "Human controls Black at the start of Human vs AI")
+	game._on_pass_requested()
+	_assert_true(game._ai_running and hud._placement_button.disabled, "controls lock while the White AI owns the turn")
+	var ai_returned_to_human: bool = await _wait_for_condition(
+		func() -> bool: return game.game_state.current_player == RuleTypes.Player.BLACK or game.game_state.is_game_over,
+		5000
+	)
+	_assert_true(ai_returned_to_human, "White AI completes its engine-driven turn")
+	_assert_true(game.game_state.action_log.size() >= 3, "Human pass and the AI turn are recorded in the shared replay log")
+	_assert_true(game._can_accept_human_input(), "controls unlock when Human vs AI returns to Black")
+
+	game._show_match_setup()
+	_find_button(hud._match_setup_overlay, "AI vs AI").pressed.emit()
+	_assert_equal(game.match_mode, DebugController.MatchMode.AI_VS_AI, "AI vs AI menu selection configures both players as AI")
+	_assert_true(game._ai_running and not game._can_accept_human_input(), "AI vs AI starts autonomously with human input locked")
+	var ai_match_advanced: bool = await _wait_for_condition(
+		func() -> bool: return game.game_state.action_log.size() >= 2 or game.game_state.is_game_over,
+		5000
+	)
+	_assert_true(ai_match_advanced, "AI vs AI advances without UI-generated gameplay decisions")
+	game._show_match_setup()
+	var stopped_action_count: int = game.game_state.action_log.size()
+	await create_timer(0.4).timeout
+	_assert_true(hud._match_setup_overlay.visible and not game.match_started, "returning to match setup stops autonomous play")
+	_assert_equal(game.game_state.action_log.size(), stopped_action_count, "stopped AI match does not submit later actions")
+
 	_finish(game)
 
 
@@ -228,6 +265,25 @@ func _context_button(hud, text: String) -> Button:
 		if child is Button and child.text == text:
 			return child
 	return null
+
+
+func _find_button(parent: Node, text: String) -> Button:
+	for child: Node in parent.get_children():
+		if child is Button and child.text == text:
+			return child
+		var nested := _find_button(child, text)
+		if nested != null:
+			return nested
+	return null
+
+
+func _wait_for_condition(condition: Callable, timeout_msec: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_msec
+	while Time.get_ticks_msec() < deadline:
+		if condition.call():
+			return true
+		await process_frame
+	return condition.call()
 
 
 func _assert_true(condition: bool, message: String) -> void:

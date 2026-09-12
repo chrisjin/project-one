@@ -11,6 +11,7 @@ signal end_turn_requested
 signal pass_requested
 signal restart_requested
 signal context_option_requested(option_id: int)
+signal match_mode_requested(match_mode: int)
 
 enum Mode {
 	NONE,
@@ -19,9 +20,16 @@ enum Mode {
 	ACTION,
 }
 
+enum MatchMode {
+	HUMAN_VS_HUMAN,
+	HUMAN_VS_AI,
+	AI_VS_AI,
+}
+
 const PLACE_ANCHOR := -1
 
 var _turn_label: Label
+var _match_mode_label: Label
 var _categories_label: Label
 var _status_label: Label
 var _debug_label: RichTextLabel
@@ -37,6 +45,7 @@ var _game_over_panel: PanelContainer
 var _game_over_label: Label
 var _context_panel: PanelContainer
 var _context_content: VBoxContainer
+var _match_setup_overlay: Control
 
 
 func _ready() -> void:
@@ -49,7 +58,12 @@ func _ready() -> void:
 	_build_controls(canvas)
 
 
-func refresh(state, legal_actions: Array, status_message: String) -> void:
+func refresh(
+	state,
+	legal_actions: Array,
+	status_message: String,
+	gameplay_input_enabled: bool = true
+) -> void:
 	var player_name := _player_name(state.current_player)
 	_turn_label.text = "Turn %d  •  %s to play" % [state.turn_number, player_name]
 	_categories_label.text = "Used: %s" % _used_categories_text(state.categories_used)
@@ -58,14 +72,15 @@ func refresh(state, legal_actions: Array, status_message: String) -> void:
 	var placement_available := _has_category_action(legal_actions, RuleTypes.ActionCategory.PLACEMENT)
 	var movement_available := _has_category_action(legal_actions, RuleTypes.ActionCategory.MOVEMENT)
 	var action_available := _has_category_action(legal_actions, RuleTypes.ActionCategory.ACTION)
-	_placement_button.disabled = state.is_game_over or not placement_available
-	_movement_button.disabled = state.is_game_over or not movement_available
-	_action_button.disabled = state.is_game_over or not action_available
-	_anchor_button.disabled = state.is_game_over or not _has_action_kind(legal_actions, GameplayAction.Kind.PLACE_ANCHOR)
-	_o_button.disabled = state.is_game_over or not _has_piece_placement(legal_actions, RuleTypes.BoardPieceType.ORTHOGONAL)
-	_d_button.disabled = state.is_game_over or not _has_piece_placement(legal_actions, RuleTypes.BoardPieceType.DIAGONAL)
-	_pass_button.disabled = state.is_game_over or not state.categories_used.is_empty()
-	_end_turn_button.disabled = state.is_game_over or state.categories_used.is_empty()
+	var input_locked: bool = state.is_game_over or not gameplay_input_enabled
+	_placement_button.disabled = input_locked or not placement_available
+	_movement_button.disabled = input_locked or not movement_available
+	_action_button.disabled = input_locked or not action_available
+	_anchor_button.disabled = input_locked or not _has_action_kind(legal_actions, GameplayAction.Kind.PLACE_ANCHOR)
+	_o_button.disabled = input_locked or not _has_piece_placement(legal_actions, RuleTypes.BoardPieceType.ORTHOGONAL)
+	_d_button.disabled = input_locked or not _has_piece_placement(legal_actions, RuleTypes.BoardPieceType.DIAGONAL)
+	_pass_button.disabled = input_locked or not state.categories_used.is_empty()
+	_end_turn_button.disabled = input_locked or state.categories_used.is_empty()
 
 	_game_over_panel.visible = state.is_game_over
 	if state.is_game_over:
@@ -81,6 +96,19 @@ func set_active_mode(mode: Mode) -> void:
 	_placement_button.button_pressed = mode == Mode.PLACEMENT
 	_movement_button.button_pressed = mode == Mode.MOVEMENT
 	_action_button.button_pressed = mode == Mode.ACTION
+
+
+func set_match_mode_text(text: String) -> void:
+	_match_mode_label.text = text
+
+
+func show_match_setup() -> void:
+	hide_context_menu()
+	_match_setup_overlay.visible = true
+
+
+func hide_match_setup() -> void:
+	_match_setup_overlay.visible = false
 
 
 func show_entity_debug(title: String, lines: Array[String]) -> void:
@@ -127,10 +155,16 @@ func _build_controls(canvas: Control) -> void:
 	controls.add_theme_constant_override("separation", 7)
 	controls_panel.add_child(controls)
 
+	var title_row := HBoxContainer.new()
+	controls.add_child(title_row)
 	var title := Label.new()
 	title.text = "ANCHOR — CORE DEBUG MATCH"
 	title.add_theme_font_size_override("font_size", 22)
-	controls.add_child(title)
+	title_row.add_child(title)
+	_match_mode_label = Label.new()
+	_match_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_match_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(_match_mode_label)
 	_turn_label = Label.new()
 	_turn_label.add_theme_font_size_override("font_size", 18)
 	controls.add_child(_turn_label)
@@ -219,6 +253,52 @@ func _build_controls(canvas: Control) -> void:
 	_context_content.add_theme_constant_override("separation", 5)
 	_context_panel.add_child(_context_content)
 	_context_panel.visible = false
+
+	_build_match_setup(canvas)
+
+
+func _build_match_setup(canvas: Control) -> void:
+	_match_setup_overlay = Control.new()
+	_match_setup_overlay.name = "MatchSetupOverlay"
+	_match_setup_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_match_setup_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_match_setup_overlay.z_index = 100
+	canvas.add_child(_match_setup_overlay)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.02, 0.03, 0.05, 0.82)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_match_setup_overlay.add_child(shade)
+
+	var panel := PanelContainer.new()
+	panel.name = "ModePanel"
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-230, -190)
+	panel.size = Vector2(460, 380)
+	_match_setup_overlay.add_child(panel)
+	var content := VBoxContainer.new()
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 14)
+	panel.add_child(content)
+
+	var heading := Label.new()
+	heading.text = "CHOOSE MATCH MODE"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 28)
+	content.add_child(heading)
+	var explanation := Label.new()
+	explanation.text = "The AI uses deterministic headless minimax.\nHuman vs AI assigns the human player to Black."
+	explanation.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(explanation)
+
+	var human_match := _make_button("Human vs Human", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_HUMAN))
+	var computer_match := _make_button("Human vs AI  •  Human is Black", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_AI))
+	var ai_match := _make_button("AI vs AI", func() -> void: match_mode_requested.emit(MatchMode.AI_VS_AI))
+	for button in [human_match, computer_match, ai_match]:
+		button.custom_minimum_size = Vector2(390, 48)
+		content.add_child(button)
 
 
 func _make_button(text: String, callback: Callable) -> Button:
