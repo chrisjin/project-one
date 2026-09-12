@@ -54,10 +54,12 @@ func test_standard_map_and_action_categories() -> void:
 	var activated = engine.apply_action(state, GameplayAction.rapid_activation(1))
 	_assert_true(activated.success, "Rapid Activation consumes the distinct Action category")
 	_assert_true(activated.state.anchors[1].is_active, "Rapid Activation activates this turn's Anchor")
-	_assert_false(
-		engine.apply_action(activated.state, GameplayAction.end_turn()).state.categories_used.size() > 0,
-		"ending a turn clears categories for the next player"
-	)
+	_assert_equal(activated.state.current_player, RuleTypes.Player.WHITE, "using the second category automatically advances the turn")
+	_assert_equal(activated.state.categories_used.size(), 0, "automatic turn advancement clears categories for the next player")
+	_assert_true(_has_event(activated.events, "turn_ended", {"automatic": true}), "automatic turn advancement is exposed as a resolution event")
+	var replayed = engine.replay(engine.new_game(), activated.state.action_log)
+	_assert_true(replayed.success, "an automatically ended turn remains replayable without a synthetic UI action")
+	_assert_equal(engine.state_hash(replayed.state), engine.state_hash(activated.state), "automatic turn replay reproduces the exact state")
 
 
 func test_start_of_turn_maturation_and_activation() -> void:
@@ -381,6 +383,20 @@ func _add_piece(
 	board_piece.is_mature = is_mature
 	state.board_pieces[id] = board_piece
 	state.next_board_piece_id = maxi(state.next_board_piece_id, id + 1)
+
+
+func _has_event(events: Array[Dictionary], event_type: String, expected_fields: Dictionary = {}) -> bool:
+	for event: Dictionary in events:
+		if event.get("type", "") != event_type:
+			continue
+		var matches := true
+		for field: Variant in expected_fields:
+			if event.get(field) != expected_fields[field]:
+				matches = false
+				break
+		if matches:
+			return true
+	return false
 
 
 func _assert_true(condition: bool, message: String) -> void:

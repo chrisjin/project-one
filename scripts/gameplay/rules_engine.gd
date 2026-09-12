@@ -41,6 +41,8 @@ func apply_action(state: GameState, action: GameplayAction) -> ActionResult:
 	candidate.categories_used.append(category)
 	candidate.consecutive_passes = 0
 	_stabilize_in_place(candidate, events)
+	if candidate.categories_used.size() >= RulesConfig.MAX_CATEGORIES_PER_TURN:
+		_advance_turn_in_place(candidate, events, false, true)
 	return _complete_transition(state, candidate, action, events)
 
 
@@ -507,6 +509,17 @@ func _end_turn(state: GameState, action: GameplayAction) -> ActionResult:
 	var candidate := state.duplicate_state()
 	var events: Array[Dictionary] = []
 	var was_pass := candidate.categories_used.is_empty()
+	_advance_turn_in_place(candidate, events, was_pass, false)
+	return _complete_transition(state, candidate, action, events)
+
+
+func _advance_turn_in_place(
+	candidate: GameState,
+	events: Array[Dictionary],
+	was_pass: bool,
+	was_automatic: bool
+) -> void:
+	var ending_player := candidate.current_player
 	candidate.consecutive_passes = candidate.consecutive_passes + 1 if was_pass else 0
 	if candidate.consecutive_passes >= 2:
 		candidate.is_game_over = true
@@ -516,9 +529,13 @@ func _end_turn(state: GameState, action: GameplayAction) -> ActionResult:
 		candidate.current_player = RuleTypes.opponent(candidate.current_player)
 		candidate.turn_number += 1
 		candidate.categories_used.clear()
+		events.append({
+			"type": "turn_ended",
+			"player": ending_player,
+			"automatic": was_automatic,
+		})
 		_process_start_of_turn(candidate, events)
 		_stabilize_in_place(candidate, events)
-	return _complete_transition(state, candidate, action, events)
 
 
 func _process_start_of_turn(state: GameState, events: Array[Dictionary]) -> void:

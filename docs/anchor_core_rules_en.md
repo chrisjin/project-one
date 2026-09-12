@@ -858,7 +858,7 @@ However:
 Each player turn consists of:
 
 1. start-of-turn processing;
-2. up to two different action categories;
+2. up to two different action categories, with automatic turn end after the second;
 3. immediate full resolution after each action.
 
 ---
@@ -906,6 +906,8 @@ The three action categories are:
 A player may use at most:
 
 > two different categories per turn.
+
+Using the second category automatically ends the turn after that action fully resolves.
 
 ---
 

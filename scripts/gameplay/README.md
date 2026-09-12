@@ -14,6 +14,8 @@ if result.success:
 
 `apply_action` never mutates its input. Successful results contain a stabilized state, structured resolution events, a replayable action-log entry, and a deterministic state hash. Rejected results return the original state and a human-readable error. `get_legal_actions`, the topology query methods, scoring, debug snapshots, and `replay` use the same rules path.
 
+When a successful action consumes the turn's second distinct category, `apply_action` also performs the authoritative start-of-next-turn transition and includes an automatic `turn_ended` event in the result.
+
 Run the dependency-free suite with:
 
 ```sh

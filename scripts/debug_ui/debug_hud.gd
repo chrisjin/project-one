@@ -10,6 +10,7 @@ signal placement_requested(board_piece_type: int)
 signal end_turn_requested
 signal pass_requested
 signal restart_requested
+signal context_option_requested(option_id: int)
 
 enum Mode {
 	NONE,
@@ -34,6 +35,8 @@ var _end_turn_button: Button
 var _pass_button: Button
 var _game_over_panel: PanelContainer
 var _game_over_label: Label
+var _context_panel: PanelContainer
+var _context_content: VBoxContainer
 
 
 func _ready() -> void:
@@ -86,6 +89,32 @@ func show_entity_debug(title: String, lines: Array[String]) -> void:
 
 func clear_entity_debug() -> void:
 	_debug_label.text = "[font_size=22][b]Entity Debug[/b][/font_size]\n\nClick any entity to inspect it."
+
+
+func show_context_menu(title: String, items: Array[Dictionary], screen_position: Vector2) -> void:
+	_clear_children(_context_content)
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.add_theme_font_size_override("font_size", 17)
+	_context_content.add_child(title_label)
+	for item: Dictionary in items:
+		var option_id: int = item.id
+		var button := _make_button(str(item.text), func() -> void: context_option_requested.emit(option_id))
+		button.disabled = not bool(item.get("enabled", true))
+		button.custom_minimum_size = Vector2(210, 34)
+		_context_content.add_child(button)
+	var menu_height := 42.0 + float(items.size()) * 40.0
+	_context_panel.size = Vector2(230, menu_height)
+	var viewport_size := get_viewport().get_visible_rect().size
+	_context_panel.position = Vector2(
+		clampf(screen_position.x + 12.0, 8.0, viewport_size.x - 238.0),
+		clampf(screen_position.y + 12.0, 8.0, viewport_size.y - menu_height - 8.0)
+	)
+	_context_panel.visible = true
+
+
+func hide_context_menu() -> void:
+	_context_panel.visible = false
 
 
 func _build_controls(canvas: Control) -> void:
@@ -181,6 +210,16 @@ func _build_controls(canvas: Control) -> void:
 	game_over_content.add_child(overlay_restart)
 	_game_over_panel.visible = false
 
+	_context_panel = PanelContainer.new()
+	_context_panel.name = "ContextMenu"
+	_context_panel.z_index = 20
+	_context_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas.add_child(_context_panel)
+	_context_content = VBoxContainer.new()
+	_context_content.add_theme_constant_override("separation", 5)
+	_context_panel.add_child(_context_content)
+	_context_panel.visible = false
+
 
 func _make_button(text: String, callback: Callable) -> Button:
 	var button := Button.new()
@@ -228,3 +267,9 @@ func _used_categories_text(categories: Array[int]) -> String:
 
 func _player_name(player: RuleTypes.Player) -> String:
 	return "Black" if player == RuleTypes.Player.BLACK else "White"
+
+
+func _clear_children(parent: Node) -> void:
+	for child in parent.get_children():
+		parent.remove_child(child)
+		child.queue_free()
