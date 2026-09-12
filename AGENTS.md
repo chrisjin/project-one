@@ -23,18 +23,6 @@ When a task depends on gameplay behavior, read only the relevant sections of the
 
 If repository paths differ, use the corresponding current core-rules and expansion-design documents.
 
-## Design Status
-
-Respect explicit design status labels:
-
-- `FINAL` / `DECIDED`: implement as specified.
-- `PROTOTYPE`: implement only when requested; keep behavior easy to change.
-- `DIRECTION`: preserve intent, but do not invent unresolved permanent mechanics.
-- `OPEN`: unresolved; do not silently choose a permanent rule.
-- `IDEA`: candidate only; do not implement unless requested.
-
-If implementation temporarily requires an unresolved value, prefer configuration, a clear placeholder, or `NEEDS_DESIGN_DECISION`.
-
 ## Scope Discipline
 
 Prefer the smallest change that fully satisfies the task.
@@ -121,7 +109,6 @@ When explicitly asked to implement changed design documents:
 6. preserve unrelated behavior;
 7. update focused tests as needed.
 
-Do not implement unrelated `OPEN`, `IDEA`, or prototype content encountered nearby.
 
 When a task establishes or changes a permanent gameplay rule, update the appropriate design document with the smallest necessary edit.
 
