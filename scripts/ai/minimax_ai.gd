@@ -30,7 +30,10 @@ const BOARD_PIECE_HP_VALUE := 12
 const MATURE_BOARD_PIECE_BONUS := 5
 const DAMAGE_REDUCTION_BONUS := 18
 const DUAL_ANCHOR_PROTECTION_BONUS := 20
-const BOARD_PIECE_TYPE_IMBALANCE_PENALTY := 8
+const ATTACK_OPPORTUNITY_VALUE := 16
+const ANCHOR_ATTACK_OPPORTUNITY_BONUS := 24
+const LETHAL_ATTACK_OPPORTUNITY_BONUS := 40
+const LETHAL_MAIN_ANCHOR_CASCADE_VALUE_PER_BOUND_BOARD_PIECE := 60
 const LIBERTY_VALUE := 2
 const MAX_SCORED_LIBERTIES_PER_GROUP := 6
 
@@ -192,17 +195,10 @@ func _contains_action(candidates: Array[Dictionary], expected_action) -> bool:
 func _side_value(state, player: RuleTypes.Player) -> int:
 	var value := 0
 	var bound_board_piece_counts: Dictionary = {}
-	var board_piece_type_counts := {
-		RuleTypes.BoardPieceType.ORTHOGONAL: 0,
-		RuleTypes.BoardPieceType.DIAGONAL: 0,
-	}
 	for board_piece in state.board_pieces.values():
-		if board_piece.player == player:
-			bound_board_piece_counts[board_piece.main_anchor_id] = int(
-				bound_board_piece_counts.get(board_piece.main_anchor_id, 0)
-			) + 1
-			if board_piece.hp > 0:
-				board_piece_type_counts[board_piece.board_piece_type] += 1
+		bound_board_piece_counts[board_piece.main_anchor_id] = int(
+			bound_board_piece_counts.get(board_piece.main_anchor_id, 0)
+		) + 1
 	var anchor_threat_damage := _anchor_threat_damage(state, player)
 	for anchor in state.anchors.values():
 		if anchor.player != player:
@@ -218,13 +214,39 @@ func _side_value(state, player: RuleTypes.Player) -> int:
 			value += DAMAGE_REDUCTION_BONUS
 		if rules_engine.has_dual_anchor_protection(state, board_piece.id):
 			value += DUAL_ANCHOR_PROTECTION_BONUS
-	value -= absi(
-		int(board_piece_type_counts[RuleTypes.BoardPieceType.ORTHOGONAL])
-		- int(board_piece_type_counts[RuleTypes.BoardPieceType.DIAGONAL])
-	) * BOARD_PIECE_TYPE_IMBALANCE_PENALTY
+	value += _attack_opportunity_value(state, player, bound_board_piece_counts)
 	for group: Dictionary in rules_engine.compute_friendly_groups(state, player):
 		var liberty_count: int = rules_engine.compute_liberties(state, group).size()
 		value += mini(liberty_count, MAX_SCORED_LIBERTIES_PER_GROUP) * LIBERTY_VALUE
+	return value
+
+
+func _attack_opportunity_value(
+	state,
+	player: RuleTypes.Player,
+	bound_board_piece_counts: Dictionary
+) -> int:
+	# Score O or D by the first enemy its engine-defined rays can actually reach.
+	var value := 0
+	for opportunity: Dictionary in rules_engine.compute_attack_opportunities(state, player):
+		var target: Dictionary = opportunity.target
+		if target.kind == RuleTypes.EntityKind.BOARD_PIECE:
+			if not state.board_pieces.has(target.id) or state.board_pieces[target.id].hp <= 0:
+				continue
+			value += ATTACK_OPPORTUNITY_VALUE
+			var target_piece = state.board_pieces[target.id]
+			if int(opportunity.damage) >= target_piece.hp \
+				and not rules_engine.has_dual_anchor_protection(state, target.id):
+				value += LETHAL_ATTACK_OPPORTUNITY_BONUS
+			continue
+		if target.kind != RuleTypes.EntityKind.ANCHOR or not state.anchors.has(target.id):
+			continue
+		value += ATTACK_OPPORTUNITY_VALUE + ANCHOR_ATTACK_OPPORTUNITY_BONUS
+		var target_anchor = state.anchors[target.id]
+		if int(opportunity.damage) >= target_anchor.hp:
+			value += LETHAL_ATTACK_OPPORTUNITY_BONUS
+			value += int(bound_board_piece_counts.get(target.id, 0)) \
+				* LETHAL_MAIN_ANCHOR_CASCADE_VALUE_PER_BOUND_BOARD_PIECE
 	return value
 
 

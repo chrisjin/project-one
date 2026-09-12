@@ -125,25 +125,35 @@ func trace_ray(state: GameState, board_piece_id: int, direction: Vector2i) -> Di
 	return result
 
 
-func compute_attack_threats(state: GameState, attacking_player: RuleTypes.Player) -> Array[Dictionary]:
-	# This turn-independent query lets headless controllers inspect exact attack rays.
-	var threats: Array[Dictionary] = []
+func compute_attack_opportunities(state: GameState, attacking_player: RuleTypes.Player) -> Array[Dictionary]:
+	# Include immature BoardPieces so controllers can evaluate their future attack geometry.
+	var opportunities: Array[Dictionary] = []
 	if state.is_game_over:
-		return threats
+		return opportunities
 	for board_piece_id: int in _sorted_int_keys(state.board_pieces):
 		var attacker: BoardPiece = state.board_pieces[board_piece_id]
-		if attacker.player != attacking_player or attacker.hp <= 0 or not attacker.is_mature:
+		if attacker.player != attacking_player or attacker.hp <= 0:
 			continue
 		for direction: Vector2i in RuleTypes.board_piece_directions(attacker.board_piece_type):
 			var ray := trace_ray(state, board_piece_id, direction)
 			if ray.target.is_empty():
 				continue
-			threats.append({
+			opportunities.append({
 				"attacker_id": board_piece_id,
 				"direction": direction,
 				"target": ray.target.duplicate(),
 				"damage": _attack_damage_to_target(state, ray.target),
 			})
+	return opportunities
+
+
+func compute_attack_threats(state: GameState, attacking_player: RuleTypes.Player) -> Array[Dictionary]:
+	# Threats are the opportunities that a mature BoardPiece can use immediately.
+	var threats: Array[Dictionary] = []
+	for opportunity: Dictionary in compute_attack_opportunities(state, attacking_player):
+		var attacker: BoardPiece = state.board_pieces[opportunity.attacker_id]
+		if attacker.is_mature:
+			threats.append(opportunity)
 	return threats
 
 

@@ -247,6 +247,12 @@ func test_attack_and_main_anchor_death_cascade() -> void:
 	_assert_equal(threats.size(), 1, "attack-threat query reports exact mature BoardPiece rays")
 	_assert_equal(threats[0].target.id, 2, "attack-threat query reports the first enemy target")
 	_assert_equal(threats[0].damage, 2, "attack-threat query reports engine-resolved damage")
+	state.board_pieces[1].is_mature = false
+	_assert_equal(engine.compute_attack_threats(state, RuleTypes.Player.BLACK).size(), 0, "immature BoardPieces are not immediate attack threats")
+	var opportunities := engine.compute_attack_opportunities(state, RuleTypes.Player.BLACK)
+	_assert_equal(opportunities.size(), 1, "attack-opportunity query exposes an immature BoardPiece's future attack geometry")
+	_assert_equal(opportunities[0].target.id, 2, "future attack geometry uses the engine's first-enemy ray target")
+	state.board_pieces[1].is_mature = true
 	var result = engine.apply_action(state, GameplayAction.attack(1, Vector2i.RIGHT))
 	_assert_true(result.success, "attack on the first enemy Anchor resolves")
 	_assert_false(result.state.anchors.has(2), "Anchors take full damage and are destroyed at zero HP")

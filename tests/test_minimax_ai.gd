@@ -23,7 +23,7 @@ func run_all() -> bool:
 	test_coordinates_have_no_intrinsic_value()
 	test_rule_connections_improve_evaluation()
 	test_main_anchor_value_includes_bound_board_pieces()
-	test_underrepresented_board_piece_type_is_preferred()
+	test_board_piece_type_uses_enemy_attack_geometry()
 	test_damaged_main_anchor_is_defended()
 	test_late_game_branching_is_bounded()
 	test_headless_ai_sequence_is_reproducible()
@@ -134,34 +134,44 @@ func test_main_anchor_value_includes_bound_board_pieces() -> void:
 	)
 
 
-func test_underrepresented_board_piece_type_is_preferred() -> void:
-	var state = engine.new_game(MapDefinition.rectangular(3, 3, true))
-	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(0, 0))
-	_add_piece(state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 0), 1)
-	state.board_pieces[1].is_mature = false
-	state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
-	state.seen_state_hashes.clear()
-	state.seen_state_hashes[engine.state_hash(state)] = true
-	var action = ai.choose_action(state)
-	_assert_equal(action.kind, GameplayAction.Kind.PLACE_BOARD_PIECE, "AI uses its available Placement category for a BoardPiece")
-	_assert_equal(
-		action.board_piece_type,
-		RuleTypes.BoardPieceType.DIAGONAL,
-		"AI adds diagonal attack coverage when its existing BoardPieces are all O"
-	)
-
-	var diagonal_state = engine.new_game(MapDefinition.rectangular(3, 3, true))
-	_add_anchor(diagonal_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 0))
-	_add_piece(diagonal_state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.DIAGONAL, Vector2i(1, 0), 1)
-	diagonal_state.board_pieces[1].is_mature = false
-	diagonal_state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
-	diagonal_state.seen_state_hashes.clear()
-	diagonal_state.seen_state_hashes[engine.state_hash(diagonal_state)] = true
-	var orthogonal_action = ai.choose_action(diagonal_state)
+func test_board_piece_type_uses_enemy_attack_geometry() -> void:
+	var positional_ai := MinimaxAi.new(engine, 1, 64)
+	var orthogonal_state = engine.new_game(_sparse_attack_map(
+		5,
+		5,
+		[Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(3, 0), Vector2i(3, 1)],
+		[Vector2i(2, 1)]
+	))
+	_add_anchor(orthogonal_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_anchor(orthogonal_state, 2, RuleTypes.Player.WHITE, Vector2i(3, 1))
+	orthogonal_state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
+	orthogonal_state.seen_state_hashes.clear()
+	orthogonal_state.seen_state_hashes[engine.state_hash(orthogonal_state)] = true
+	var orthogonal_action = positional_ai.choose_action(orthogonal_state)
+	_assert_equal(orthogonal_action.kind, GameplayAction.Kind.PLACE_BOARD_PIECE, "AI uses its available Placement category for a BoardPiece")
 	_assert_equal(
 		orthogonal_action.board_piece_type,
 		RuleTypes.BoardPieceType.ORTHOGONAL,
-		"AI adds orthogonal attack coverage when its existing BoardPieces are all D"
+		"an enemy on an orthogonal attack ray makes O the efficient deployment"
+	)
+
+	var diagonal_state = engine.new_game(_sparse_attack_map(
+		5,
+		5,
+		[Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(3, 3), Vector2i(4, 3)],
+		[Vector2i(2, 2)]
+	))
+	_add_anchor(diagonal_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_anchor(diagonal_state, 2, RuleTypes.Player.WHITE, Vector2i(3, 3))
+	diagonal_state.categories_used.append(RuleTypes.ActionCategory.MOVEMENT)
+	diagonal_state.seen_state_hashes.clear()
+	diagonal_state.seen_state_hashes[engine.state_hash(diagonal_state)] = true
+	var diagonal_action = positional_ai.choose_action(diagonal_state)
+	_assert_equal(diagonal_action.kind, GameplayAction.Kind.PLACE_BOARD_PIECE, "AI can deploy against a diagonal target position")
+	_assert_equal(
+		diagonal_action.board_piece_type,
+		RuleTypes.BoardPieceType.DIAGONAL,
+		"an enemy on a diagonal attack ray makes D the efficient deployment"
 	)
 
 
@@ -248,6 +258,24 @@ func _simulate_actions(seed: int, action_count: int) -> Array[Dictionary]:
 		actions.append(action.to_dictionary())
 		state = result.state
 	return actions
+
+
+func _sparse_attack_map(
+	width: int,
+	height: int,
+	passable_cells: Array[Vector2i],
+	ray_transparent_impassable_cells: Array[Vector2i]
+):
+	var map_definition := MapDefinition.new(width, height)
+	for y in range(height):
+		for x in range(width):
+			map_definition.set_playable(Vector2i(x, y), false)
+	for cell: Vector2i in passable_cells:
+		map_definition.set_playable(cell, true)
+	for cell: Vector2i in ray_transparent_impassable_cells:
+		map_definition.set_playable(cell, true)
+		map_definition.set_impassable(cell, true, false)
+	return map_definition
 
 
 func _add_anchor(state, id: int, player: RuleTypes.Player, cell: Vector2i, hp: int = 3) -> void:
