@@ -9,7 +9,7 @@
 >
 > Canonical implementation terminology:
 >
-> - `BoardPiece` = all movable/scoring combat pieces.
+> - `BoardPiece` = all combat/scoring pieces.
 > - `Anchor` = non-BoardPiece structural entity.
 > - `AnchorCluster` = one or more orthogonally connected friendly Anchors.
 > - In prose, `Piece` may be used as shorthand for `BoardPiece`.
@@ -122,7 +122,8 @@ The exact API language is illustrative; the rule distinction is authoritative.
 
 Movement includes:
 
-- normal movement;
+- normal Anchor movement in the core game;
+- future BoardPiece movement explicitly enabled by its rules/configuration;
 - Movement-class effect cards.
 
 A Movement effect:

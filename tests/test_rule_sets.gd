@@ -50,8 +50,8 @@ func test_core_rule_set_matches_current_game() -> void:
 	for config in [o_config, d_config]:
 		_assert_equal(config.attack_range, 6, "base BoardPieces retain attack range 6")
 		_assert_equal(config.attack_damage, 2, "base BoardPieces retain attack damage 2")
-		_assert_equal(config.movement_type, RuleTypes.MovementType.ORTHOGONAL, "base BoardPieces retain orthogonal movement")
-		_assert_equal(config.movement_range, 1, "base BoardPieces retain movement range 1")
+		_assert_equal(config.movement_type, RuleTypes.MovementType.ORTHOGONAL, "base BoardPieces retain configurable movement geometry")
+		_assert_equal(config.movement_range, 0, "base BoardPieces cannot move in the core rule set")
 		_assert_equal(config.max_hp, 2, "base BoardPieces retain 2 maximum HP")
 		_assert_equal(config.defense, 0, "base BoardPieces retain zero innate defense")
 		_assert_equal(config.binding_limit, 0, "BoardPieces cannot bind other BoardPieces")

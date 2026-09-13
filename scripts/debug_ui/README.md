@@ -2,7 +2,7 @@
 
 Run the project from Godot or execute the project binary with `--path .`. The default scene first offers **Human vs Human**, **Human vs AI as Black**, **Human vs AI as White**, and **AI vs AI** on the standard board.
 
-- Choose **Placement**, **Movement**, or **Action**, then click only engine-highlighted sources and destinations.
+- Choose **Placement**, **Movement**, or **Action**, then click only engine-highlighted sources and destinations. In the core game, Movement highlights Anchors only; base O and D BoardPieces cannot move.
 - For O/D placement, click a highlighted physical Main Anchor before choosing the destination.
 - **Pass** is available before using a category; **End Turn** is available afterward.
 - Click an entity without a mode selected to inspect engine-provided diagnostics.

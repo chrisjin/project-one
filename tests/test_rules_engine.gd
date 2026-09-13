@@ -18,6 +18,7 @@ var assertion_count := 0
 func run_all() -> bool:
 	test_standard_map_and_action_categories()
 	test_start_of_turn_maturation_and_activation()
+	test_core_movement_permissions()
 	test_anchor_binding_capacity_and_slot_reuse()
 	test_anchor_clusters_merge_and_split()
 	test_supply_paths_and_cuts()
@@ -80,6 +81,37 @@ func test_start_of_turn_maturation_and_activation() -> void:
 	_assert_true(to_black.success, "White can pass back to Black")
 	_assert_true(to_black.state.anchors[1].is_active, "Anchor activates at the start of its controller's next turn")
 	_assert_true(to_black.state.board_pieces[1].is_mature, "BoardPiece matures at the start of its controller's next turn")
+
+
+func test_core_movement_permissions() -> void:
+	var state = _fixture_state(5, 3)
+	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(1, 1))
+	_add_piece(state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(2, 1), 1)
+	state.seen_state_hashes[engine.state_hash(state)] = true
+	var has_anchor_move := false
+	var has_board_piece_move := false
+	for action: GameplayAction in engine.get_legal_actions(state):
+		if action.kind != GameplayAction.Kind.MOVE:
+			continue
+		if action.entity_kind == RuleTypes.EntityKind.ANCHOR and action.entity_id == 1:
+			has_anchor_move = true
+		elif action.entity_kind == RuleTypes.EntityKind.BOARD_PIECE and action.entity_id == 1:
+			has_board_piece_move = true
+	_assert_true(has_anchor_move, "core legal actions include movement for a friendly Anchor")
+	_assert_false(has_board_piece_move, "core legal actions exclude movement for base BoardPieces")
+	_assert_false(
+		engine.apply_action(
+			state,
+			GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, 1, Vector2i(2, 2))
+		).success,
+		"core engine rejects a submitted base BoardPiece movement"
+	)
+	var anchor_move = engine.apply_action(
+		state,
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(1, 2))
+	)
+	_assert_true(anchor_move.success, "core engine still accepts a legal Anchor movement")
+	_assert_equal(anchor_move.state.anchors[1].cell, Vector2i(1, 2), "Anchor movement reaches its selected cell")
 
 
 func test_anchor_binding_capacity_and_slot_reuse() -> void:
@@ -303,19 +335,17 @@ func test_range_diagonal_scoring_and_repetition() -> void:
 	_assert_equal(scoring_end.state.outcome, RuleTypes.Outcome.BLACK_WIN, "higher surviving BoardPiece count wins")
 
 	var repeat_state = _fixture_state(5, 2)
-	_add_anchor(repeat_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 1), true)
-	_add_piece(repeat_state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 0), 1, 2, true)
-	_add_anchor(repeat_state, 2, RuleTypes.Player.WHITE, Vector2i(4, 1), true)
-	_add_piece(repeat_state, 2, RuleTypes.Player.WHITE, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(4, 0), 2, 2, true)
+	_add_anchor(repeat_state, 1, RuleTypes.Player.BLACK, Vector2i(0, 0), true)
+	_add_anchor(repeat_state, 2, RuleTypes.Player.WHITE, Vector2i(4, 0), true)
 	repeat_state.seen_state_hashes[engine.state_hash(repeat_state)] = true
 	var transitions = [
-		GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, 1, Vector2i(1, 0)),
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(1, 0)),
 		GameplayAction.end_turn(),
-		GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, 2, Vector2i(3, 0)),
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 2, Vector2i(3, 0)),
 		GameplayAction.end_turn(),
-		GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, 1, Vector2i(0, 0)),
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(0, 0)),
 		GameplayAction.end_turn(),
-		GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, 2, Vector2i(4, 0)),
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 2, Vector2i(4, 0)),
 	]
 	for action: GameplayAction in transitions:
 		var transition = engine.apply_action(repeat_state, action)

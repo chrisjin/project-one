@@ -5,7 +5,7 @@
 >
 > To keep the rules independent from the final game setting, the term **Anchor** is used throughout.
 >
-> **Canonical implementation terminology:** `BoardPiece` is the code-facing term for all movable/scoring combat pieces. In prose, **Piece** may be used as shorthand. **Anchors are not BoardPieces.**
+> **Canonical implementation terminology:** `BoardPiece` is the code-facing term for all combat/scoring pieces. In prose, **Piece** may be used as shorthand. **Anchors are not BoardPieces.**
 
 ---
 
@@ -165,7 +165,7 @@ Each physical Anchor:
 
 - HP: **2**
 - Attack: **2**
-- Move: 1 orthogonal cell
+- Move: none
 - Attack directions:
   - up
   - down
@@ -179,7 +179,7 @@ Each physical Anchor:
 
 - HP: **2**
 - Attack: **2**
-- Move: 1 orthogonal cell
+- Move: none
 - Attack directions:
   - up-left
   - up-right
@@ -187,7 +187,7 @@ Each physical Anchor:
   - down-right
 - Maximum range: **6 grid steps**
 
-> O and D differ only in attack geometry. Their movement is identical.
+> O and D differ only in attack geometry. Neither base BoardPiece can move in the current core game.
 
 ---
 
@@ -929,7 +929,7 @@ A player may not use Placement twice in the same turn.
 
 One Movement may be:
 
-- make one normal movement with one movable friendly unit;
+- move one movable friendly board entity (an Anchor in the current core game);
 - if movement-effect cards are enabled, play one Movement-class effect card.
 
 Therefore:
@@ -1032,7 +1032,7 @@ A newly deployed BoardPiece:
 
 - immediately occupies its cell;
 - immediately participates in connectivity and blocking;
-- may use the turn's remaining Movement category;
+- cannot make a normal movement;
 - may not make a normal attack on the deployment turn;
 - matures at the start of its controller's next turn;
 - cannot survive at 0 HP while immature.
@@ -1084,18 +1084,9 @@ uses both categories for that turn.
 
 ## 13.1 BoardPieces
 
-A positive-HP BoardPiece:
+Base O and D BoardPieces cannot make normal movements in the current core game.
 
-```text
-moves 1 orthogonal cell
-```
-
-The destination must be:
-
-- passable;
-- empty.
-
-A 0-HP BoardPiece cannot move.
+They therefore cannot be selected as the entity for a normal Movement action, regardless of HP or maturity.
 
 ---
 
@@ -1398,7 +1389,7 @@ Higher score wins; equal score is a draw.
 
 1. Standard board: 7×7; Black moves first.
 2. Each turn choose at most two different categories from **Placement / Movement / Action**.
-3. Anchor: 3 HP. Base BoardPiece: 2 HP / 2 attack.
+3. Anchor: 3 HP and moves 1 orthogonal cell. Base BoardPiece: 2 HP / 2 attack and cannot move.
 4. O attacks orthogonally; D attacks on 45° diagonals.
 5. O / D base maximum range is **6 grid steps**.
 6. On 7×7, range 6 is effectively board-wide; larger maps still keep range 6.
@@ -1413,7 +1404,7 @@ Higher score wins; equal score is a draw.
 15. Only a continuous friendly-unit chain to the Main Anchor grants 1 damage reduction; empty-space supply does not.
 16. A valid Secondary Anchor Cluster must be a different active Cluster.
 17. Secondary Anchors provide 0-HP survival, not damage reduction.
-18. A legal 0-HP BoardPiece still occupies space, scores, connects, and blocks rays, but cannot move or attack.
+18. A legal 0-HP BoardPiece still occupies space, scores, connects, and blocks rays, but cannot attack; like every base BoardPiece, it cannot move.
 19. After Supply resolves, an Anchor that remains orthogonally connected to a legal dual-Anchor-protected BoardPiece survives with that zero-liberty structure; only when the entire friendly connected group contains no such BoardPiece do we check pure Anchor / Anchor Cluster zero-liberty death.
 20. Friendly positive-HP BoardPieces are transparent to friendly normal rays.
 21. Friendly 0-HP BoardPieces and friendly Anchors block friendly normal rays.

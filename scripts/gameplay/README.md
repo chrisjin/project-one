@@ -2,7 +2,7 @@
 
 `AnchorRulesEngine` is the presentation-free entry point. It owns authoritative action validation and stabilization while `AnchorGameState`, `AnchorMapDefinition`, and the entity state classes hold serializable simulation data. Rendering, scenes, input, AI, and expansion content are deliberately absent.
 
-Gameplay balance and entity capabilities come from an immutable `AnchorRuleSet`. `AnchorCoreRuleSet` is the concrete configuration for the current authoritative game. Separate ruleset instances can be supplied to separate engines and AI players without changing global state. Headless AI implementations share the small `AnchorGameplayAi` interface and receive their ruleset when instantiated.
+Gameplay balance and entity capabilities come from an immutable `AnchorRuleSet`. `AnchorCoreRuleSet` is the concrete configuration for the current authoritative game. Its Anchors move one orthogonal cell, while base O and D BoardPieces have movement range 0. Separate ruleset instances can be supplied to separate engines and AI players without changing global state, including alternate rulesets that enable other BoardPiece movement configurations. Headless AI implementations share the small `AnchorGameplayAi` interface and receive their ruleset when instantiated.
 
 Typical use:
 

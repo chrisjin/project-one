@@ -4,6 +4,7 @@ extends SceneTree
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
 const Anchor = preload("res://scripts/gameplay/anchor_state.gd")
 const BoardPiece = preload("res://scripts/gameplay/board_piece_state.gd")
+const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
 const DebugController = preload("res://scripts/debug_ui/debug_game_controller.gd")
 
 var failures: Array[String] = []
@@ -87,10 +88,22 @@ func _run() -> void:
 	_assert_true(hud._categories_label.text.contains("Placement"), "consumed action category is displayed")
 	_assert_true(hud._placement_button.disabled, "consumed action category is visually disabled")
 	game._on_mode_requested(2)
+	_assert_false(
+		game._has_source_action({"kind": RuleTypes.EntityKind.BOARD_PIECE, "id": 1}, GameplayAction.Kind.MOVE),
+		"base BoardPieces are absent from core movement actions"
+	)
+	_assert_true(
+		game._has_source_action({"kind": RuleTypes.EntityKind.ANCHOR, "id": 1}, GameplayAction.Kind.MOVE),
+		"core Movement mode still exposes engine-approved Anchors"
+	)
 	game._handle_cell_click(Vector2i(2, 1))
-	game._handle_cell_click(Vector2i(2, 2))
-	_assert_equal(game.game_state.board_pieces[1].cell, Vector2i(2, 2), "movement selection submits the exact highlighted engine action")
-	_assert_equal(game.game_state.current_player, RuleTypes.Player.WHITE, "placement plus movement automatically advances to the other local player")
+	_assert_equal(game.game_state.board_pieces[1].cell, Vector2i(2, 1), "clicking a base BoardPiece cannot submit a core movement action")
+	_assert_true(game.cell_actions.is_empty(), "a non-movable BoardPiece exposes no movement destinations")
+	game._on_mode_requested(2)
+	game._handle_cell_click(Vector2i(1, 1))
+	game._handle_cell_click(Vector2i(1, 2))
+	_assert_equal(game.game_state.anchors[1].cell, Vector2i(1, 2), "Anchor movement submits the exact highlighted engine action")
+	_assert_equal(game.game_state.current_player, RuleTypes.Player.WHITE, "placement plus Anchor movement automatically advances to the other local player")
 
 	game._on_placement_requested(-1)
 	game._handle_cell_click(Vector2i(5, 3))
@@ -100,23 +113,23 @@ func _run() -> void:
 	_assert_equal(game.game_state.current_player, RuleTypes.Player.BLACK, "second player's two categories automatically return control to Black")
 
 	game._on_placement_requested(RuleTypes.BoardPieceType.DIAGONAL)
-	game._handle_cell_click(Vector2i(1, 1))
 	game._handle_cell_click(Vector2i(1, 2))
+	game._handle_cell_click(Vector2i(1, 1))
 	_assert_equal(game.game_state.board_pieces[2].board_piece_type, RuleTypes.BoardPieceType.DIAGONAL, "D BoardPiece placement uses the selected engine action")
 	game._on_end_turn_requested()
 
 	game._on_placement_requested(RuleTypes.BoardPieceType.ORTHOGONAL)
 	game._handle_cell_click(Vector2i(5, 3))
-	game._handle_cell_click(Vector2i(4, 2))
+	game._handle_cell_click(Vector2i(4, 1))
 	_assert_true(game.game_state.board_pieces.has(3), "second local player can place a bound O BoardPiece")
 	game._on_end_turn_requested()
-	game._handle_cell_click(Vector2i(2, 2))
+	game._handle_cell_click(Vector2i(2, 1))
 	_assert_true(_context_button(hud, "Action") != null, "combat-ready BoardPiece context includes Action")
 	game._on_context_option_requested(DebugController.ContextOption.BOARD_PIECE_ACTION)
 	_assert_false(_context_button(hud, "Attack").disabled, "Attack submenu is enabled by an exact legal engine action")
 	game._on_context_option_requested(DebugController.ContextOption.BOARD_PIECE_ATTACK)
-	_assert_true(game.cell_actions.has(Vector2i(4, 2)), "attack target highlight comes from the engine ray for a legal action")
-	game._handle_cell_click(Vector2i(4, 2))
+	_assert_true(game.cell_actions.has(Vector2i(4, 1)), "attack target highlight comes from the engine ray for a legal action")
+	game._handle_cell_click(Vector2i(4, 1))
 	_assert_false(game.game_state.board_pieces.has(3), "clicking the highlighted attack target resolves engine damage and death")
 
 	var zero_hp_state = game.rules_engine.new_game()
@@ -310,10 +323,13 @@ func _run() -> void:
 	board_view._process(0.5)
 	_assert_true(first_binding_dot.position != initial_dot_position, "binding dots animate from the Anchor toward its BoardPiece")
 	_assert_true(first_binding_dot.material_override.emission_enabled, "binding dots use a light emissive debug material")
-	_assert_false(_context_button(hud, "Move").disabled, "BoardPiece Move is enabled from its exact engine actions")
-	game._on_context_option_requested(DebugController.ContextOption.BOARD_PIECE_MOVE)
-	_assert_true(game.cell_actions.has(Vector2i(2, 2)), "BoardPiece context Move highlights engine-approved destinations")
-	game._handle_cell_click(Vector2i(2, 2))
+	_assert_true(_context_button(hud, "Move").disabled, "BoardPiece Move is disabled when the core engine exposes no movement actions")
+	game._handle_cell_click(Vector2i(1, 1), Vector2(420, 300))
+	_assert_false(_context_button(hud, "Move").disabled, "Anchor Move remains enabled from its exact engine actions")
+	game._on_context_option_requested(DebugController.ContextOption.ANCHOR_MOVE)
+	_assert_true(game.cell_actions.has(Vector2i(1, 2)), "Anchor context Move highlights engine-approved destinations")
+	game._handle_cell_click(Vector2i(1, 2))
+	_assert_equal(game.game_state.anchors[1].cell, Vector2i(1, 2), "Anchor context Move submits the selected destination")
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 0, "binding visualization clears after the selected action resolves")
 
 	game._handle_cell_click(Vector2i(3, 1), Vector2(520, 300))
@@ -330,7 +346,7 @@ func _run() -> void:
 		3,
 		RuleTypes.Player.BLACK,
 		RuleTypes.BoardPieceType.ORTHOGONAL,
-		Vector2i(1, 2),
+		Vector2i(1, 1),
 		1,
 		game.game_state.turn_number,
 		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
@@ -338,17 +354,17 @@ func _run() -> void:
 	game.game_state.next_board_piece_id = 4
 	game.game_state = game.rules_engine.stabilize(game.game_state)
 	game._refresh_all()
-	game._handle_cell_click(Vector2i(1, 1), Vector2(420, 300))
+	game._handle_cell_click(Vector2i(1, 2), Vector2(420, 300))
 	_assert_true(_context_button(hud, "Placement") == null, "full-capacity Anchor context omits Placement using engine debug capacity data")
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "selecting an Anchor shows every BoardPiece physically bound to it")
 
-	game._handle_cell_click(Vector2i(2, 2), Vector2(470, 360))
-	game._on_context_option_requested(DebugController.ContextOption.BOARD_PIECE_MOVE)
-	_assert_equal(game.mode, DebugController.Mode.MOVEMENT, "BoardPiece Move enters destination-selection mode")
+	game._on_context_option_requested(DebugController.ContextOption.ANCHOR_MOVE)
+	_assert_equal(game.mode, DebugController.Mode.MOVEMENT, "Anchor Move enters destination-selection mode")
 	game._handle_cell_click(Vector2i(3, 1), Vector2(520, 300))
-	_assert_equal(game.mode, DebugController.Mode.NONE, "clicking a different BoardPiece exits the prior movement workflow")
+	_assert_equal(game.mode, DebugController.Mode.NONE, "clicking a BoardPiece exits the prior Anchor movement workflow")
 	_assert_equal(game.context_entity.id, 2, "the newly clicked BoardPiece becomes the context selection")
 	_assert_true(hud._context_panel.visible and _context_button(hud, "Move") != null, "the newly clicked BoardPiece opens its normal option menu")
+	_assert_true(_context_button(hud, "Move").disabled, "the newly opened BoardPiece menu keeps core movement disabled")
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "switching selection refreshes the selected BoardPiece's full Anchor binding group")
 
 	game._show_match_setup()
