@@ -6,12 +6,13 @@ const MapDefinition = preload("res://scripts/gameplay/map_definition.gd")
 const Anchor = preload("res://scripts/gameplay/anchor_state.gd")
 const BoardPiece = preload("res://scripts/gameplay/board_piece_state.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
-const RulesConfig = preload("res://scripts/gameplay/rules_config.gd")
+const CoreRuleSet = preload("res://scripts/gameplay/core_rule_set.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
 const MinimaxAi = preload("res://scripts/ai/minimax_ai.gd")
 
-var engine := RulesEngine.new()
-var ai := MinimaxAi.new(engine)
+var rule_set := CoreRuleSet.new()
+var engine := RulesEngine.new(rule_set)
+var ai := MinimaxAi.new(rule_set)
 var failures: Array[String] = []
 var assertion_count := 0
 
@@ -119,11 +120,18 @@ func test_rule_connections_improve_evaluation() -> void:
 
 
 func test_main_anchor_value_includes_bound_board_pieces() -> void:
-	var anchor = Anchor.new(1, RuleTypes.Player.BLACK, Vector2i.ZERO, 0, 1)
+	var anchor = Anchor.new(
+		1,
+		RuleTypes.Player.BLACK,
+		Vector2i.ZERO,
+		0,
+		1,
+		rule_set.anchor_config().max_hp
+	)
 	anchor.is_active = true
 	var unbound_value: int = ai._anchor_value(anchor, 0)
-	var fully_bound_value: int = ai._anchor_value(anchor, RulesConfig.ANCHOR_BINDING_CAPACITY)
-	var expected_dependency_value: int = RulesConfig.ANCHOR_BINDING_CAPACITY * (
+	var fully_bound_value: int = ai._anchor_value(anchor, rule_set.anchor_config().binding_limit)
+	var expected_dependency_value: int = rule_set.anchor_config().binding_limit * (
 		MinimaxAi.MAIN_ANCHOR_CASCADE_VALUE_PER_BOUND_BOARD_PIECE
 		+ anchor.hp * MinimaxAi.MAIN_ANCHOR_HP_VALUE_PER_BOUND_BOARD_PIECE
 	)
@@ -135,7 +143,7 @@ func test_main_anchor_value_includes_bound_board_pieces() -> void:
 
 
 func test_board_piece_type_uses_enemy_attack_geometry() -> void:
-	var positional_ai := MinimaxAi.new(engine, 1, 64)
+	var positional_ai := MinimaxAi.new(rule_set, 1, 64)
 	var orthogonal_state = engine.new_game(_sparse_attack_map(
 		5,
 		5,
@@ -183,7 +191,7 @@ func test_damaged_main_anchor_is_defended() -> void:
 	_add_piece(state, 12, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(4, 0), 1)
 	for board_piece_id in [10, 11, 12]:
 		state.board_pieces[board_piece_id].is_mature = false
-	state.anchors_deployed[RuleTypes.Player.BLACK] = RulesConfig.ANCHOR_DEPLOYMENT_LIMIT
+	state.anchors_deployed[RuleTypes.Player.BLACK] = rule_set.anchor_deployment_limit
 	_add_anchor(state, 2, RuleTypes.Player.WHITE, Vector2i(0, 0))
 	_add_piece(state, 2, RuleTypes.Player.WHITE, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 1), 2)
 	state.seen_state_hashes.clear()
@@ -279,9 +287,8 @@ func _sparse_attack_map(
 
 
 func _add_anchor(state, id: int, player: RuleTypes.Player, cell: Vector2i, hp: int = 3) -> void:
-	var anchor = Anchor.new(id, player, cell, 0, id)
+	var anchor = Anchor.new(id, player, cell, 0, id, hp)
 	anchor.is_active = true
-	anchor.hp = hp
 	state.anchors[id] = anchor
 	state.next_anchor_id = maxi(state.next_anchor_id, id + 1)
 	state.anchors_deployed[player] += 1
@@ -295,7 +302,15 @@ func _add_piece(
 	cell: Vector2i,
 	main_anchor_id: int
 ) -> void:
-	var board_piece = BoardPiece.new(id, player, type, cell, main_anchor_id, 0)
+	var board_piece = BoardPiece.new(
+		id,
+		player,
+		type,
+		cell,
+		main_anchor_id,
+		0,
+		rule_set.board_piece_config(type).max_hp
+	)
 	board_piece.is_mature = true
 	state.board_pieces[id] = board_piece
 	state.next_board_piece_id = maxi(state.next_board_piece_id, id + 1)

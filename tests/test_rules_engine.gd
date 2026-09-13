@@ -6,9 +6,11 @@ const MapDefinition = preload("res://scripts/gameplay/map_definition.gd")
 const Anchor = preload("res://scripts/gameplay/anchor_state.gd")
 const BoardPiece = preload("res://scripts/gameplay/board_piece_state.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
+const CoreRuleSet = preload("res://scripts/gameplay/core_rule_set.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
 
-var engine := RulesEngine.new()
+var rule_set := CoreRuleSet.new()
+var engine := RulesEngine.new(rule_set)
 var failures: Array[String] = []
 var assertion_count := 0
 
@@ -378,9 +380,8 @@ func _add_anchor(
 	deployed_turn: int = 0,
 	hp: int = 3
 ) -> void:
-	var anchor = Anchor.new(id, player, cell, deployed_turn, id)
+	var anchor = Anchor.new(id, player, cell, deployed_turn, id, hp)
 	anchor.is_active = is_active
-	anchor.hp = hp
 	state.anchors[id] = anchor
 	state.next_anchor_id = maxi(state.next_anchor_id, id + 1)
 	state.anchors_deployed[player] += 1
@@ -397,8 +398,7 @@ func _add_piece(
 	is_mature: bool = true,
 	deployed_turn: int = 0
 ) -> void:
-	var board_piece = BoardPiece.new(id, player, type, cell, main_anchor_id, deployed_turn)
-	board_piece.hp = hp
+	var board_piece = BoardPiece.new(id, player, type, cell, main_anchor_id, deployed_turn, hp)
 	board_piece.is_mature = is_mature
 	state.board_pieces[id] = board_piece
 	state.next_board_piece_id = maxi(state.next_board_piece_id, id + 1)

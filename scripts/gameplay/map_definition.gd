@@ -2,8 +2,6 @@
 class_name AnchorMapDefinition
 extends RefCounted
 
-const RulesConfig = preload("res://scripts/gameplay/rules_config.gd")
-
 var width: int
 var height: int
 var playable_cells: Dictionary = {}
@@ -21,12 +19,13 @@ func _init(map_width: int = 7, map_height: int = 7) -> void:
 
 
 static func standard_7x7() -> AnchorMapDefinition:
-	var map_definition := AnchorMapDefinition.new(
-		RulesConfig.STANDARD_BOARD_SIZE.x,
-		RulesConfig.STANDARD_BOARD_SIZE.y
-	)
-	for y in range(1, 6):
-		for x in range(1, 6):
+	return standard(Vector2i(7, 7))
+
+
+static func standard(board_size: Vector2i) -> AnchorMapDefinition:
+	var map_definition := AnchorMapDefinition.new(board_size.x, board_size.y)
+	for y in range(1, board_size.y - 1):
+		for x in range(1, board_size.x - 1):
 			map_definition.anchor_valid_cells[Vector2i(x, y)] = true
 	return map_definition
 

@@ -3,7 +3,8 @@ class_name AnchorRulesEngine
 extends RefCounted
 
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
-const RulesConfig = preload("res://scripts/gameplay/rules_config.gd")
+const RuleSet = preload("res://scripts/gameplay/rules_config.gd")
+const CoreRuleSet = preload("res://scripts/gameplay/core_rule_set.gd")
 const MapDefinition = preload("res://scripts/gameplay/map_definition.gd")
 const Anchor = preload("res://scripts/gameplay/anchor_state.gd")
 const BoardPiece = preload("res://scripts/gameplay/board_piece_state.gd")
@@ -11,9 +12,21 @@ const GameState = preload("res://scripts/gameplay/game_state.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
 const ActionResult = preload("res://scripts/gameplay/action_result.gd")
 
+var _rule_set: RuleSet
+var rule_set: RuleSet:
+	get:
+		return _rule_set
+
+
+func _init(configured_rule_set: RuleSet = null) -> void:
+	_rule_set = configured_rule_set if configured_rule_set != null else CoreRuleSet.new()
+
 
 func new_game(board_map: MapDefinition = null, random_seed: int = 0) -> GameState:
-	var state := GameState.new(board_map, random_seed)
+	var resolved_map := board_map
+	if resolved_map == null:
+		resolved_map = MapDefinition.standard(rule_set.standard_board_size)
+	var state := GameState.new(resolved_map, random_seed)
 	state.seen_state_hashes[state_hash(state)] = true
 	return state
 
@@ -29,8 +42,8 @@ func apply_action(state: GameState, action: GameplayAction) -> ActionResult:
 		return ActionResult.new(false, state, "The action has no core action category.")
 	if state.categories_used.has(category):
 		return ActionResult.new(false, state, "That action category was already used this turn.")
-	if state.categories_used.size() >= RulesConfig.MAX_CATEGORIES_PER_TURN:
-		return ActionResult.new(false, state, "At most two action categories may be used per turn.")
+	if state.categories_used.size() >= rule_set.max_categories_per_turn:
+		return ActionResult.new(false, state, "The turn's action-category limit was already reached.")
 
 	var candidate := state.duplicate_state()
 	var events: Array[Dictionary] = []
@@ -41,7 +54,7 @@ func apply_action(state: GameState, action: GameplayAction) -> ActionResult:
 	candidate.categories_used.append(category)
 	candidate.consecutive_passes = 0
 	_stabilize_in_place(candidate, events)
-	if candidate.categories_used.size() >= RulesConfig.MAX_CATEGORIES_PER_TURN:
+	if candidate.categories_used.size() >= rule_set.max_categories_per_turn:
 		_advance_turn_in_place(candidate, events, false, true)
 	return _complete_transition(state, candidate, action, events)
 
@@ -78,7 +91,7 @@ func get_legal_transitions(state: GameState) -> Array[Dictionary]:
 		return transitions
 
 	candidates.append(GameplayAction.end_turn())
-	if state.categories_used.size() < RulesConfig.MAX_CATEGORIES_PER_TURN:
+	if state.categories_used.size() < rule_set.max_categories_per_turn:
 		if not state.categories_used.has(RuleTypes.ActionCategory.PLACEMENT):
 			_append_placement_actions(state, candidates)
 		if not state.categories_used.has(RuleTypes.ActionCategory.MOVEMENT):
@@ -101,10 +114,13 @@ func trace_ray(state: GameState, board_piece_id: int, direction: Vector2i) -> Di
 	if not state.board_pieces.has(board_piece_id):
 		return result
 	var board_piece: BoardPiece = state.board_pieces[board_piece_id]
-	if not RuleTypes.board_piece_directions(board_piece.board_piece_type).has(direction):
+	if not rule_set.has_board_piece_config(board_piece.board_piece_type):
+		return result
+	var attack_config = rule_set.board_piece_config(board_piece.board_piece_type)
+	if not RuleTypes.attack_directions(attack_config.attack_type).has(direction):
 		return result
 
-	for distance in range(1, RulesConfig.BOARD_PIECE_MAX_RANGE + 1):
+	for distance in range(1, attack_config.attack_range + 1):
 		var cell := board_piece.cell + direction * distance
 		if not state.map_definition.is_on_map(cell):
 			break
@@ -134,7 +150,10 @@ func compute_attack_opportunities(state: GameState, attacking_player: RuleTypes.
 		var attacker: BoardPiece = state.board_pieces[board_piece_id]
 		if attacker.player != attacking_player or attacker.hp <= 0:
 			continue
-		for direction: Vector2i in RuleTypes.board_piece_directions(attacker.board_piece_type):
+		if not rule_set.has_board_piece_config(attacker.board_piece_type):
+			continue
+		var attack_config = rule_set.board_piece_config(attacker.board_piece_type)
+		for direction: Vector2i in RuleTypes.attack_directions(attack_config.attack_type):
 			var ray := trace_ray(state, board_piece_id, direction)
 			if ray.target.is_empty():
 				continue
@@ -142,7 +161,7 @@ func compute_attack_opportunities(state: GameState, attacking_player: RuleTypes.
 				"attacker_id": board_piece_id,
 				"direction": direction,
 				"target": ray.target.duplicate(),
-				"damage": _attack_damage_to_target(state, ray.target),
+				"damage": _attack_damage_to_target(state, board_piece_id, ray.target),
 			})
 	return opportunities
 
@@ -322,7 +341,10 @@ func board_piece_debug(state: GameState, board_piece_id: int) -> Dictionary:
 		"main_anchor_alive": state.anchors.has(board_piece.main_anchor_id),
 		"supply_valid": compute_supply(state, board_piece_id),
 		"unit_chain_connected": compute_unit_chain_connection(state, board_piece_id),
-		"damage_reduction_active": compute_unit_chain_connection(state, board_piece_id),
+		"damage_reduction_active": _active_hp_reduction(state, {
+			"kind": RuleTypes.EntityKind.BOARD_PIECE,
+			"id": board_piece_id,
+		}) > 0,
 		"secondary_anchor_cluster_ids": secondary_anchor_cluster_ids(state, board_piece_id),
 		"dual_anchor_protection": has_dual_anchor_protection(state, board_piece_id),
 		"zero_hp_protection_valid": board_piece.hp <= 0 and has_dual_anchor_protection(state, board_piece_id),
@@ -351,7 +373,7 @@ func anchor_debug(state: GameState, anchor_id: int) -> Dictionary:
 		"anchor_cluster_id": clusters[cluster_index][0] if cluster_index >= 0 else -1,
 		"bound_board_piece_ids": bound_board_piece_ids,
 		"bound_board_piece_count": bound_board_piece_ids.size(),
-		"binding_capacity": RulesConfig.ANCHOR_BINDING_CAPACITY,
+		"binding_capacity": rule_set.anchor_config().binding_limit,
 		"deployment_index": anchor.deployment_index,
 		"zero_liberty": group_data.liberty_count == 0,
 		"protected_group_membership": group_data.has_protected_board_piece,
@@ -371,6 +393,7 @@ func state_hash(state: GameState) -> String:
 	var categories := state.categories_used.duplicate()
 	categories.sort()
 	var canonical := [
+		rule_set.canonical_data(),
 		state.map_definition.canonical_data(),
 		anchor_data,
 		board_piece_data,
@@ -415,8 +438,8 @@ func _execute_action(state: GameState, action: GameplayAction, events: Array[Dic
 
 
 func _place_anchor(state: GameState, action: GameplayAction, events: Array[Dictionary]) -> String:
-	if state.anchors_deployed[state.current_player] >= RulesConfig.ANCHOR_DEPLOYMENT_LIMIT:
-		return "The player has reached the 12-Anchor deployment limit."
+	if state.anchors_deployed[state.current_player] >= rule_set.anchor_deployment_limit:
+		return "The player has reached the Anchor deployment limit."
 	if not state.map_definition.is_anchor_valid(action.cell):
 		return "An Anchor may only be deployed on an Anchor-valid passable cell."
 	if not state.is_cell_empty(action.cell):
@@ -429,7 +452,8 @@ func _place_anchor(state: GameState, action: GameplayAction, events: Array[Dicti
 		state.current_player,
 		action.cell,
 		state.turn_number,
-		state.anchors_deployed[state.current_player]
+		state.anchors_deployed[state.current_player],
+		rule_set.anchor_config().max_hp
 	)
 	state.anchors[anchor_id] = anchor
 	events.append({"type": "anchor_deployed", "anchor_id": anchor_id, "cell": action.cell})
@@ -437,8 +461,8 @@ func _place_anchor(state: GameState, action: GameplayAction, events: Array[Dicti
 
 
 func _place_board_piece(state: GameState, action: GameplayAction, events: Array[Dictionary]) -> String:
-	if action.board_piece_type not in [RuleTypes.BoardPieceType.ORTHOGONAL, RuleTypes.BoardPieceType.DIAGONAL]:
-		return "Only base O and D BoardPieces are available in the core engine."
+	if not rule_set.has_board_piece_config(action.board_piece_type):
+		return "That BoardPiece type is not available in this rule set."
 	if not state.map_definition.is_passable(action.cell):
 		return "A BoardPiece must be deployed on a passable cell."
 	if not state.is_cell_empty(action.cell):
@@ -448,7 +472,7 @@ func _place_board_piece(state: GameState, action: GameplayAction, events: Array[
 	var main_anchor: Anchor = state.anchors[action.main_anchor_id]
 	if main_anchor.player != state.current_player:
 		return "The selected Main Anchor is not friendly."
-	if _bound_board_piece_count(state, action.main_anchor_id) >= RulesConfig.ANCHOR_BINDING_CAPACITY:
+	if _bound_board_piece_count(state, action.main_anchor_id) >= rule_set.anchor_config().binding_limit:
 		return "The selected physical Main Anchor has no available binding slot."
 	var board_piece_id := state.next_board_piece_id
 	state.next_board_piece_id += 1
@@ -458,7 +482,8 @@ func _place_board_piece(state: GameState, action: GameplayAction, events: Array[
 		action.board_piece_type,
 		action.cell,
 		action.main_anchor_id,
-		state.turn_number
+		state.turn_number,
+		rule_set.board_piece_config(action.board_piece_type).max_hp
 	)
 	events.append({
 		"type": "board_piece_deployed",
@@ -478,8 +503,8 @@ func _move_entity(state: GameState, action: GameplayAction, events: Array[Dictio
 		var anchor: Anchor = state.anchors[action.entity_id]
 		if anchor.player != state.current_player:
 			return "Only a friendly Anchor may move."
-		if not _is_orthogonally_adjacent(anchor.cell, action.cell):
-			return "An Anchor moves exactly one orthogonal cell."
+		if not _movement_destinations(anchor.cell, rule_set.anchor_config()).has(action.cell):
+			return "The Anchor's rule configuration does not permit that movement."
 		if not state.map_definition.is_anchor_valid(action.cell):
 			return "An Anchor must remain on an Anchor-valid cell."
 		var origin := anchor.cell
@@ -494,8 +519,11 @@ func _move_entity(state: GameState, action: GameplayAction, events: Array[Dictio
 			return "Only a friendly BoardPiece may move."
 		if board_piece.hp <= 0:
 			return "A 0-HP BoardPiece cannot move."
-		if not _is_orthogonally_adjacent(board_piece.cell, action.cell):
-			return "A BoardPiece moves exactly one orthogonal cell."
+		if not rule_set.has_board_piece_config(board_piece.board_piece_type):
+			return "The BoardPiece type has no rule configuration."
+		var movement_config = rule_set.board_piece_config(board_piece.board_piece_type)
+		if not _movement_destinations(board_piece.cell, movement_config).has(action.cell):
+			return "The BoardPiece's rule configuration does not permit that movement."
 		var origin := board_piece.cell
 		board_piece.cell = action.cell
 		events.append({"type": "board_piece_moved", "board_piece_id": board_piece.id, "from": origin, "to": action.cell})
@@ -513,14 +541,17 @@ func _attack(state: GameState, action: GameplayAction, events: Array[Dictionary]
 		return "A 0-HP BoardPiece cannot attack."
 	if not attacker.is_mature:
 		return "A newly deployed BoardPiece cannot attack until it matures."
-	if not RuleTypes.board_piece_directions(attacker.board_piece_type).has(action.direction):
+	if not rule_set.has_board_piece_config(attacker.board_piece_type):
+		return "The attacking BoardPiece type has no rule configuration."
+	var attack_config = rule_set.board_piece_config(attacker.board_piece_type)
+	if not RuleTypes.attack_directions(attack_config.attack_type).has(action.direction):
 		return "The attack direction is invalid for this BoardPiece type."
 	var ray := trace_ray(state, attacker.id, action.direction)
 	if ray.target.is_empty():
 		return "The attack ray does not reach an enemy board entity."
 
 	var target: Dictionary = ray.target
-	var actual_damage := _attack_damage_to_target(state, target)
+	var actual_damage := _attack_damage_to_target(state, attacker.id, target)
 	if target.kind == RuleTypes.EntityKind.BOARD_PIECE:
 		var target_piece: BoardPiece = state.board_pieces[target.id]
 		target_piece.hp = maxi(0, target_piece.hp - actual_damage)
@@ -536,12 +567,36 @@ func _attack(state: GameState, action: GameplayAction, events: Array[Dictionary]
 	return ""
 
 
-func _attack_damage_to_target(state: GameState, target: Dictionary) -> int:
-	var damage := RulesConfig.BOARD_PIECE_ATTACK
-	if target.kind == RuleTypes.EntityKind.BOARD_PIECE \
-			and compute_unit_chain_connection(state, target.id):
-		damage = maxi(0, damage - RulesConfig.MAIN_ANCHOR_DAMAGE_REDUCTION)
-	return damage
+func _attack_damage_to_target(
+	state: GameState,
+	attacker_id: int,
+	target: Dictionary
+) -> int:
+	var attacker: BoardPiece = state.board_pieces[attacker_id]
+	var attack_config = rule_set.board_piece_config(attacker.board_piece_type)
+	var target_config = rule_set.anchor_config()
+	if target.kind == RuleTypes.EntityKind.BOARD_PIECE:
+		var target_piece: BoardPiece = state.board_pieces[target.id]
+		target_config = rule_set.board_piece_config(target_piece.board_piece_type)
+	var damage: int = attack_config.attack_damage - target_config.defense
+	damage -= _active_hp_reduction(state, target)
+	return maxi(0, damage)
+
+
+func _active_hp_reduction(state: GameState, target: Dictionary) -> int:
+	if target.kind != RuleTypes.EntityKind.BOARD_PIECE or not state.board_pieces.has(target.id):
+		return 0
+	var board_piece: BoardPiece = state.board_pieces[target.id]
+	if not rule_set.has_board_piece_config(board_piece.board_piece_type):
+		return 0
+	var config = rule_set.board_piece_config(board_piece.board_piece_type)
+	var reduction := 0
+	for reduction_rule: Dictionary in config.hp_reductions:
+		match int(reduction_rule.type):
+			RuleTypes.HpReductionType.MAIN_ANCHOR_DAMAGE_REDUCTION:
+				if compute_unit_chain_connection(state, target.id):
+					reduction += int(reduction_rule.amount)
+	return reduction
 
 
 func _rapid_activation(state: GameState, action: GameplayAction, events: Array[Dictionary]) -> String:
@@ -765,18 +820,20 @@ func _append_placement_actions(state: GameState, actions: Array[GameplayAction])
 	var friendly_anchors: Array[int] = []
 	for anchor_id: int in _sorted_int_keys(state.anchors):
 		var anchor: Anchor = state.anchors[anchor_id]
-		if anchor.player == state.current_player and _bound_board_piece_count(state, anchor_id) < RulesConfig.ANCHOR_BINDING_CAPACITY:
+		if anchor.player == state.current_player \
+				and _bound_board_piece_count(state, anchor_id) < rule_set.anchor_config().binding_limit:
 			friendly_anchors.append(anchor_id)
 	for y in range(state.map_definition.height):
 		for x in range(state.map_definition.width):
 			var cell := Vector2i(x, y)
 			if not state.map_definition.is_passable(cell) or not state.is_cell_empty(cell):
 				continue
-			if state.map_definition.is_anchor_valid(cell) and state.anchors_deployed[state.current_player] < RulesConfig.ANCHOR_DEPLOYMENT_LIMIT:
+			if state.map_definition.is_anchor_valid(cell) \
+					and state.anchors_deployed[state.current_player] < rule_set.anchor_deployment_limit:
 				actions.append(GameplayAction.place_anchor(cell))
 			for anchor_id: int in friendly_anchors:
-				actions.append(GameplayAction.place_board_piece(RuleTypes.BoardPieceType.ORTHOGONAL, cell, anchor_id))
-				actions.append(GameplayAction.place_board_piece(RuleTypes.BoardPieceType.DIAGONAL, cell, anchor_id))
+				for board_piece_type: int in rule_set.board_piece_types():
+					actions.append(GameplayAction.place_board_piece(board_piece_type, cell, anchor_id))
 
 
 func _append_movement_actions(state: GameState, actions: Array[GameplayAction]) -> void:
@@ -784,16 +841,17 @@ func _append_movement_actions(state: GameState, actions: Array[GameplayAction]) 
 		var anchor: Anchor = state.anchors[anchor_id]
 		if anchor.player != state.current_player:
 			continue
-		for direction: Vector2i in RuleTypes.ORTHOGONAL_DIRECTIONS:
-			var destination := anchor.cell + direction
+		for destination: Vector2i in _movement_destinations(anchor.cell, rule_set.anchor_config()):
 			if state.map_definition.is_anchor_valid(destination) and state.is_cell_empty(destination):
 				actions.append(GameplayAction.move(RuleTypes.EntityKind.ANCHOR, anchor_id, destination))
 	for board_piece_id: int in _sorted_int_keys(state.board_pieces):
 		var board_piece: BoardPiece = state.board_pieces[board_piece_id]
 		if board_piece.player != state.current_player or board_piece.hp <= 0:
 			continue
-		for direction: Vector2i in RuleTypes.ORTHOGONAL_DIRECTIONS:
-			var destination := board_piece.cell + direction
+		if not rule_set.has_board_piece_config(board_piece.board_piece_type):
+			continue
+		var movement_config = rule_set.board_piece_config(board_piece.board_piece_type)
+		for destination: Vector2i in _movement_destinations(board_piece.cell, movement_config):
 			if state.map_definition.is_passable(destination) and state.is_cell_empty(destination):
 				actions.append(GameplayAction.move(RuleTypes.EntityKind.BOARD_PIECE, board_piece_id, destination))
 
@@ -807,9 +865,20 @@ func _append_core_actions(state: GameState, actions: Array[GameplayAction]) -> v
 		var board_piece: BoardPiece = state.board_pieces[board_piece_id]
 		if board_piece.player != state.current_player or board_piece.hp <= 0 or not board_piece.is_mature:
 			continue
-		for direction: Vector2i in RuleTypes.board_piece_directions(board_piece.board_piece_type):
+		if not rule_set.has_board_piece_config(board_piece.board_piece_type):
+			continue
+		var attack_config = rule_set.board_piece_config(board_piece.board_piece_type)
+		for direction: Vector2i in RuleTypes.attack_directions(attack_config.attack_type):
 			if not trace_ray(state, board_piece_id, direction).target.is_empty():
 				actions.append(GameplayAction.attack(board_piece_id, direction))
+
+
+func _movement_destinations(origin: Vector2i, config) -> Array[Vector2i]:
+	var destinations: Array[Vector2i] = []
+	for direction: Vector2i in RuleTypes.movement_directions(config.movement_type):
+		for distance in range(1, config.movement_range + 1):
+			destinations.append(origin + direction * distance)
+	return destinations
 
 
 func _bound_board_piece_count(state: GameState, anchor_id: int) -> int:

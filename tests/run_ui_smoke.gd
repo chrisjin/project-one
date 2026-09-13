@@ -120,11 +120,23 @@ func _run() -> void:
 	_assert_false(game.game_state.board_pieces.has(3), "clicking the highlighted attack target resolves engine damage and death")
 
 	var zero_hp_state = game.rules_engine.new_game()
-	var first_anchor = Anchor.new(1, RuleTypes.Player.BLACK, Vector2i(1, 1), 0, 1)
+	var first_anchor = Anchor.new(
+		1, RuleTypes.Player.BLACK, Vector2i(1, 1), 0, 1, game.rule_set.anchor_config().max_hp
+	)
 	first_anchor.is_active = true
-	var second_anchor = Anchor.new(2, RuleTypes.Player.BLACK, Vector2i(3, 1), 0, 2)
+	var second_anchor = Anchor.new(
+		2, RuleTypes.Player.BLACK, Vector2i(3, 1), 0, 2, game.rule_set.anchor_config().max_hp
+	)
 	second_anchor.is_active = true
-	var zero_hp_piece = BoardPiece.new(1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(2, 1), 1, 0)
+	var zero_hp_piece = BoardPiece.new(
+		1,
+		RuleTypes.Player.BLACK,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(2, 1),
+		1,
+		0,
+		0
+	)
 	zero_hp_piece.is_mature = true
 	zero_hp_piece.hp = 0
 	zero_hp_state.anchors = {1: first_anchor, 2: second_anchor}
@@ -192,7 +204,15 @@ func _run() -> void:
 
 	game.game_state.current_player = RuleTypes.Player.BLACK
 	game.game_state.categories_used.clear()
-	game.game_state.board_pieces[3] = BoardPiece.new(3, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 2), 1, game.game_state.turn_number)
+	game.game_state.board_pieces[3] = BoardPiece.new(
+		3,
+		RuleTypes.Player.BLACK,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(1, 2),
+		1,
+		game.game_state.turn_number,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
 	game.game_state.next_board_piece_id = 4
 	game.game_state = game.rules_engine.stabilize(game.game_state)
 	game._refresh_all()

@@ -4,6 +4,7 @@ extends Node3D
 
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
+const CoreRuleSet = preload("res://scripts/gameplay/core_rule_set.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
 const MinimaxAi = preload("res://scripts/ai/minimax_ai.gd")
 
@@ -42,7 +43,8 @@ const MAIN_ANCHOR_OPTION_BASE := 1000
 @onready var board_view: AnchorDebugBoardView = $BoardView
 @onready var hud: AnchorDebugHud = $DebugHud
 
-var rules_engine := RulesEngine.new()
+var rule_set := CoreRuleSet.new()
+var rules_engine := RulesEngine.new(rule_set)
 var minimax_ai
 var game_state
 var legal_actions: Array = []
@@ -66,7 +68,7 @@ var _ai_generation := 0
 
 
 func _ready() -> void:
-	minimax_ai = MinimaxAi.new(rules_engine)
+	minimax_ai = MinimaxAi.new(rule_set)
 	var camera_target := Vector3(camera.position.x, 0.0, camera.position.z)
 	camera.look_at(camera_target, Vector3(0.0, 0.0, -1.0))
 	hud.mode_requested.connect(_on_mode_requested)

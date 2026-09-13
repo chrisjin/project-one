@@ -3,12 +3,11 @@ class_name AnchorState
 extends RefCounted
 
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
-const RulesConfig = preload("res://scripts/gameplay/rules_config.gd")
 
 var id: int
 var player: RuleTypes.Player
 var cell: Vector2i
-var hp: int = RulesConfig.ANCHOR_STARTING_HP
+var hp: int
 var is_active: bool = false
 var deployed_turn: int
 var deployment_index: int
@@ -19,18 +18,19 @@ func _init(
 	owner: RuleTypes.Player = RuleTypes.Player.BLACK,
 	position: Vector2i = Vector2i.ZERO,
 	turn_deployed: int = 0,
-	owner_deployment_index: int = 0
+	owner_deployment_index: int = 0,
+	starting_hp: int = 0
 ) -> void:
 	id = anchor_id
 	player = owner
 	cell = position
 	deployed_turn = turn_deployed
 	deployment_index = owner_deployment_index
+	hp = starting_hp
 
 
 func duplicate_state() -> AnchorState:
-	var copy := AnchorState.new(id, player, cell, deployed_turn, deployment_index)
-	copy.hp = hp
+	var copy := AnchorState.new(id, player, cell, deployed_turn, deployment_index, hp)
 	copy.is_active = is_active
 	return copy
 

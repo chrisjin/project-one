@@ -2,15 +2,21 @@
 
 `AnchorRulesEngine` is the presentation-free entry point. It owns authoritative action validation and stabilization while `AnchorGameState`, `AnchorMapDefinition`, and the entity state classes hold serializable simulation data. Rendering, scenes, input, AI, and expansion content are deliberately absent.
 
+Gameplay balance and entity capabilities come from an immutable `AnchorRuleSet`. `AnchorCoreRuleSet` is the concrete configuration for the current authoritative game. Separate ruleset instances can be supplied to separate engines and AI players without changing global state. Headless AI implementations share the small `AnchorGameplayAi` interface and receive their ruleset when instantiated.
+
 Typical use:
 
 ```gdscript
-var engine := AnchorRulesEngine.new()
+var rule_set := AnchorCoreRuleSet.new()
+var engine := AnchorRulesEngine.new(rule_set)
+var ai := AnchorMinimaxAi.new(rule_set)
 var state := engine.new_game()
 var result := engine.apply_action(state, AnchorGameplayAction.place_anchor(Vector2i(1, 1)))
 if result.success:
     state = result.state
 ```
+
+To experiment with another ruleset, construct `AnchorRuleSet` with an Anchor `EntityConfig`, a `BoardPieceType -> EntityConfig` dictionary, board size, category limit, and Anchor deployment limit. `EntityConfig` exposes attack, movement, HP, defense, binding, and conditional HP-reduction values through read-only accessors; exposed dictionaries and reduction lists are defensive copies.
 
 `apply_action` never mutates its input. Successful results contain a stabilized state, structured resolution events, a replayable action-log entry, and a deterministic state hash. Rejected results return the original state and a human-readable error. `get_legal_actions`, the topology query methods, scoring, debug snapshots, and `replay` use the same rules path.
 

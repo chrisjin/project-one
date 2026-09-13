@@ -1,8 +1,9 @@
 ## Deterministic bounded minimax player operating only through the headless rules engine.
 class_name AnchorMinimaxAi
-extends RefCounted
+extends "res://scripts/ai/gameplay_ai.gd"
 
 const RuleTypes = preload("res://scripts/gameplay/rule_types.gd")
+const CoreRuleSet = preload("res://scripts/gameplay/core_rule_set.gd")
 const GameplayAction = preload("res://scripts/gameplay/gameplay_action.gd")
 const RulesEngine = preload("res://scripts/gameplay/rules_engine.gd")
 
@@ -45,8 +46,9 @@ var _search_node_count := 0
 var _evaluation_cache: Dictionary = {}
 
 
-func _init(engine = null, depth: int = 3, action_limit: int = 8) -> void:
-	rules_engine = engine if engine != null else RulesEngine.new()
+func _init(configured_rule_set: RuleSet = null, depth: int = 3, action_limit: int = 8) -> void:
+	super(configured_rule_set if configured_rule_set != null else CoreRuleSet.new())
+	rules_engine = RulesEngine.new(rule_set)
 	search_depth = maxi(1, depth)
 	max_actions_per_node = maxi(2, action_limit)
 

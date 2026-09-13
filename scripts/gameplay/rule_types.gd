@@ -12,6 +12,22 @@ enum BoardPieceType {
 	DIAGONAL,
 }
 
+enum AttackType {
+	NONE,
+	ORTHOGONAL,
+	DIAGONAL,
+}
+
+enum MovementType {
+	NONE,
+	ORTHOGONAL,
+	DIAGONAL,
+}
+
+enum HpReductionType {
+	MAIN_ANCHOR_DAMAGE_REDUCTION,
+}
+
 enum EntityKind {
 	ANCHOR,
 	BOARD_PIECE,
@@ -49,7 +65,19 @@ static func opponent(player: Player) -> Player:
 	return Player.WHITE if player == Player.BLACK else Player.BLACK
 
 
-static func board_piece_directions(board_piece_type: BoardPieceType) -> Array[Vector2i]:
-	if board_piece_type == BoardPieceType.ORTHOGONAL:
+static func attack_directions(attack_type: AttackType) -> Array[Vector2i]:
+	if attack_type == AttackType.ORTHOGONAL:
 		return ORTHOGONAL_DIRECTIONS.duplicate()
-	return DIAGONAL_DIRECTIONS.duplicate()
+	if attack_type == AttackType.DIAGONAL:
+		return DIAGONAL_DIRECTIONS.duplicate()
+	var no_directions: Array[Vector2i] = []
+	return no_directions
+
+
+static func movement_directions(movement_type: MovementType) -> Array[Vector2i]:
+	if movement_type == MovementType.ORTHOGONAL:
+		return ORTHOGONAL_DIRECTIONS.duplicate()
+	if movement_type == MovementType.DIAGONAL:
+		return DIAGONAL_DIRECTIONS.duplicate()
+	var no_directions: Array[Vector2i] = []
+	return no_directions
