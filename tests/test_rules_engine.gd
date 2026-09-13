@@ -113,6 +113,31 @@ func test_core_movement_permissions() -> void:
 	_assert_true(anchor_move.success, "core engine still accepts a legal Anchor movement")
 	_assert_equal(anchor_move.state.anchors[1].cell, Vector2i(1, 2), "Anchor movement reaches its selected cell")
 
+	var reduction_state = _fixture_state(5, 5)
+	_add_anchor(reduction_state, 1, RuleTypes.Player.BLACK, Vector2i(1, 1))
+	_add_piece(reduction_state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 2), 1)
+	_assert_true(engine.board_piece_debug(reduction_state, 1).damage_reduction_active, "adjacent Main Anchor initially grants damage reduction")
+	var reduction_move = engine.apply_action(
+		reduction_state,
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(2, 1))
+	)
+	_assert_true(reduction_move.success, "Main Anchor can move away from its BoardPiece unit chain")
+	_assert_true(reduction_move.state.board_pieces.has(1), "empty-cell Supply keeps the BoardPiece alive after its Main Anchor moves")
+	_assert_false(engine.board_piece_debug(reduction_move.state, 1).damage_reduction_active, "Anchor movement immediately removes stale damage reduction")
+
+	var zero_hp_state = _fixture_state(5, 5)
+	_add_anchor(zero_hp_state, 1, RuleTypes.Player.BLACK, Vector2i(1, 1))
+	_add_piece(zero_hp_state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(2, 1), 1, 0, true)
+	_add_anchor(zero_hp_state, 2, RuleTypes.Player.BLACK, Vector2i(3, 1))
+	_assert_true(engine.has_dual_anchor_protection(zero_hp_state, 1), "0-HP BoardPiece initially has distinct Secondary Anchor protection")
+	var protection_move = engine.apply_action(
+		zero_hp_state,
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 2, Vector2i(3, 2))
+	)
+	_assert_true(protection_move.success, "Secondary Anchor can move away from its protected BoardPiece")
+	_assert_false(protection_move.state.board_pieces.has(1), "Anchor movement immediately removes a 0-HP BoardPiece that loses protection")
+	_assert_true(_has_event(protection_move.events, "board_piece_removed", {"board_piece_id": 1, "cause": "zero_hp"}), "lost Anchor protection reports the 0-HP removal cause")
+
 
 func test_anchor_binding_capacity_and_slot_reuse() -> void:
 	var state = _fixture_state(6, 2)

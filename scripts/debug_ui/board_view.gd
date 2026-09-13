@@ -25,6 +25,7 @@ var _shield_badge_mesh: ArrayMesh
 var _warning_badge_material: StandardMaterial3D
 var _friendly_shield_badge_material: StandardMaterial3D
 var _enemy_shield_badge_material: StandardMaterial3D
+var _damage_reduction_badge_material: StandardMaterial3D
 var _friendly_threat_line_material: StandardMaterial3D
 var _enemy_threat_line_material: StandardMaterial3D
 var _friendly_threat_arrow_material: StandardMaterial3D
@@ -78,6 +79,7 @@ func _ready() -> void:
 	_warning_badge_material = _make_status_material(Color("ff263b"))
 	_friendly_shield_badge_material = _make_status_material(Color("ffc928"))
 	_enemy_shield_badge_material = _make_status_material(Color("287cff"))
+	_damage_reduction_badge_material = _make_status_material(Color("33d6c5"))
 	_friendly_threat_line_material = _make_status_material(Color(0.12, 0.92, 0.34, 0.28))
 	_enemy_threat_line_material = _make_status_material(Color(1.0, 0.12, 0.18, 0.28))
 	_friendly_threat_arrow_material = _make_status_material(Color(0.18, 1.0, 0.42, 0.78))
@@ -417,6 +419,8 @@ func _add_status_icons(entity_root: Node3D, statuses: Dictionary) -> void:
 		status_kinds.append("attack_threat")
 	if bool(statuses.get("dual_anchor_protection", false)):
 		status_kinds.append("dual_anchor_protection")
+	if bool(statuses.get("damage_reduction_active", false)):
+		status_kinds.append("damage_reduction")
 	if status_kinds.is_empty():
 		return
 
@@ -427,8 +431,10 @@ func _add_status_icons(entity_root: Node3D, statuses: Dictionary) -> void:
 		var icon: Node3D
 		if status_kinds[index] == "attack_threat":
 			icon = _make_warning_icon()
-		else:
+		elif status_kinds[index] == "dual_anchor_protection":
 			icon = _make_shield_icon(bool(statuses.get("enemy_dual_anchor_protection", false)))
+		else:
+			icon = _make_damage_reduction_icon()
 		# From the fixed top-down camera, -Z is screen-up and +X is screen-right.
 		icon.position = Vector3(0.43 - float(index) * 0.31, 1.02, -0.43)
 		icons_root.add_child(icon)
@@ -459,6 +465,22 @@ func _make_shield_icon(is_enemy: bool) -> Node3D:
 	badge.material_override = _enemy_shield_badge_material if is_enemy else _friendly_shield_badge_material
 	badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(badge)
+	return root
+
+
+func _make_damage_reduction_icon() -> Node3D:
+	var root := Node3D.new()
+	root.name = "DamageReductionShield"
+	var badge := MeshInstance3D.new()
+	badge.name = "Badge"
+	badge.mesh = _shield_badge_mesh
+	badge.material_override = _damage_reduction_badge_material
+	badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(badge)
+	var symbol := _make_world_label("-1", Color.WHITE, 25)
+	symbol.name = "Symbol"
+	symbol.position.y = 0.025
+	root.add_child(symbol)
 	return root
 
 

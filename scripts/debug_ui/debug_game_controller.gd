@@ -628,7 +628,9 @@ func _perspective_entity_statuses(threat_visuals: Array[Dictionary]) -> Dictiona
 	for board_piece_id: int in game_state.board_pieces:
 		var board_piece = game_state.board_pieces[board_piece_id]
 		var debug_data: Dictionary = rules_engine.board_piece_debug(game_state, board_piece_id)
-		if not bool(debug_data.get("dual_anchor_protection", false)):
+		var has_dual_protection := bool(debug_data.get("dual_anchor_protection", false))
+		var has_damage_reduction := bool(debug_data.get("damage_reduction_active", false))
+		if not has_dual_protection and not has_damage_reduction:
 			continue
 		var board_piece_key := _entity_key({
 			"kind": RuleTypes.EntityKind.BOARD_PIECE,
@@ -636,8 +638,9 @@ func _perspective_entity_statuses(threat_visuals: Array[Dictionary]) -> Dictiona
 		})
 		if not statuses.has(board_piece_key):
 			statuses[board_piece_key] = {}
-		statuses[board_piece_key]["dual_anchor_protection"] = true
+		statuses[board_piece_key]["dual_anchor_protection"] = has_dual_protection
 		statuses[board_piece_key]["enemy_dual_anchor_protection"] = board_piece.player != perspective
+		statuses[board_piece_key]["damage_reduction_active"] = has_damage_reduction
 	return statuses
 
 

@@ -159,6 +159,36 @@ func _run() -> void:
 	game._refresh_all()
 	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1") != null, "legal 0-HP BoardPiece remains visible")
 	_assert_float(board_view.get_node("Entities/BoardPiece_1").get_child(0).scale.x, 0.64, "0-HP BoardPiece has an obvious reduced-scale visualization")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1/StatusIcons/DualProtectionShield") != null, "legal 0-HP protection is visible before an Anchor moves")
+	var zero_hp_anchor_move = GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 2, Vector2i(3, 2))
+	_assert_true(game._submit_action(zero_hp_anchor_move), "UI submits the Secondary Anchor movement")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1") == null, "UI immediately removes a 0-HP BoardPiece that loses Anchor protection")
+
+	var reduction_state = game.rules_engine.new_game()
+	var reduction_anchor = Anchor.new(
+		1, RuleTypes.Player.BLACK, Vector2i(1, 1), 0, 1, game.rule_set.anchor_config().max_hp
+	)
+	reduction_anchor.is_active = true
+	var reduction_piece = BoardPiece.new(
+		1,
+		RuleTypes.Player.BLACK,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(1, 2),
+		1,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	reduction_piece.is_mature = true
+	reduction_state.anchors = {1: reduction_anchor}
+	reduction_state.board_pieces = {1: reduction_piece}
+	reduction_state.anchors_deployed[RuleTypes.Player.BLACK] = 1
+	game.game_state = game.rules_engine.stabilize(reduction_state)
+	game._refresh_all()
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1/StatusIcons/DamageReductionShield") != null, "active Main Anchor damage reduction has a visible status badge")
+	var reduction_anchor_move = GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(2, 1))
+	_assert_true(game._submit_action(reduction_anchor_move), "UI submits the Main Anchor movement")
+	_assert_true(game.game_state.board_pieces.has(1), "BoardPiece remains supplied after its Main Anchor moves through open cells")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1/StatusIcons/DamageReductionShield") == null, "UI immediately clears damage reduction after its Main Anchor moves away")
 
 	var status_state = game.rules_engine.new_game()
 	var status_black_main = Anchor.new(
@@ -250,7 +280,7 @@ func _run() -> void:
 	_assert_true(threat_warning.position.x > protection_shield.position.x, "simultaneous warning and shield badges render one after another")
 	_assert_true(threat_warning.get_node("Badge").material_override.emission_enabled, "attack warning uses a glowing emissive material")
 	_assert_true(board_view.get_node_or_null("Entities/Anchor_2/StatusIcons/ThreatWarning") != null, "immature enemy's next-turn attack path warns the current player's Anchor")
-	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent attack warnings stay hidden from the current player's perspective")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons/ThreatWarning") == null, "opponent attack warnings stay hidden from the current player's perspective")
 	var enemy_shield_badge: MeshInstance3D = board_view.get_node("Entities/BoardPiece_4/StatusIcons/DualProtectionShield/Badge")
 	_assert_true(enemy_shield_badge.material_override.albedo_color.b > enemy_shield_badge.material_override.albedo_color.r, "opponent dual protection uses a blue shield")
 	_assert_equal(board_view.get_node("ThreatFlow").get_child_count(), 4, "each engine-reported attack opportunity renders one threat path")
