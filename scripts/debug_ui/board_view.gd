@@ -19,6 +19,10 @@ var _black_zero_hp_material: StandardMaterial3D
 var _white_zero_hp_material: StandardMaterial3D
 var _binding_dot_mesh: SphereMesh
 var _binding_dot_material: StandardMaterial3D
+var _warning_badge_mesh: ArrayMesh
+var _shield_badge_mesh: ArrayMesh
+var _warning_badge_material: StandardMaterial3D
+var _shield_badge_material: StandardMaterial3D
 var _binding_paths: Array[Dictionary] = []
 var _binding_flow_distance := 0.0
 
@@ -46,6 +50,22 @@ func _ready() -> void:
 	_binding_dot_mesh.radial_segments = 8
 	_binding_dot_mesh.rings = 4
 	_binding_dot_material = _make_material(Color(1.0, 0.93, 0.55, 0.94), true)
+	_warning_badge_mesh = _make_flat_mesh(
+		PackedVector2Array([Vector2(0.0, -0.16), Vector2(-0.15, 0.14), Vector2(0.15, 0.14)]),
+		PackedInt32Array([0, 1, 2])
+	)
+	_shield_badge_mesh = _make_flat_mesh(
+		PackedVector2Array([
+			Vector2(-0.14, -0.14),
+			Vector2(0.14, -0.14),
+			Vector2(0.14, 0.03),
+			Vector2(0.0, 0.18),
+			Vector2(-0.14, 0.03),
+		]),
+		PackedInt32Array([0, 2, 1, 0, 3, 2, 0, 4, 3])
+	)
+	_warning_badge_material = _make_status_material(Color("ff263b"))
+	_shield_badge_material = _make_status_material(Color("ffc928"))
 
 
 func _process(delta: float) -> void:
@@ -59,7 +79,8 @@ func refresh_from_state(
 	state,
 	cell_highlights: Dictionary = {},
 	selected_entity: Dictionary = {},
-	binding_visual: Dictionary = {}
+	binding_visual: Dictionary = {},
+	entity_statuses: Dictionary = {}
 ) -> void:
 	map_definition = state.map_definition
 	var signature := JSON.stringify(map_definition.canonical_data())
@@ -74,9 +95,15 @@ func refresh_from_state(
 	if not selected_entity.is_empty():
 		_add_selection_marker(state.entity_cell(selected_entity))
 	for anchor_id: int in state.anchors:
-		_render_anchor(state.anchors[anchor_id])
+		_render_anchor(
+			state.anchors[anchor_id],
+			entity_statuses.get(_entity_status_key(RuleTypes.EntityKind.ANCHOR, anchor_id), {})
+		)
 	for board_piece_id: int in state.board_pieces:
-		_render_board_piece(state.board_pieces[board_piece_id])
+		_render_board_piece(
+			state.board_pieces[board_piece_id],
+			entity_statuses.get(_entity_status_key(RuleTypes.EntityKind.BOARD_PIECE, board_piece_id), {})
+		)
 
 
 func _render_binding_flow(state, binding_visual: Dictionary) -> void:
@@ -235,7 +262,7 @@ func _add_coordinate_labels() -> void:
 		_board_root.add_child(label)
 
 
-func _render_anchor(anchor) -> void:
+func _render_anchor(anchor, statuses: Dictionary = {}) -> void:
 	var root := Node3D.new()
 	root.name = "Anchor_%d" % anchor.id
 	root.position = cell_to_world(anchor.cell)
@@ -256,10 +283,11 @@ func _render_anchor(anchor) -> void:
 	var label := _make_world_label("A%d  HP %d%s" % [anchor.id, anchor.hp, status], _label_color(anchor.player), 34)
 	label.position = Vector3(0.0, 0.92, 0.0)
 	root.add_child(label)
+	_add_status_icons(root, statuses)
 	_entity_root.add_child(root)
 
 
-func _render_board_piece(board_piece) -> void:
+func _render_board_piece(board_piece, statuses: Dictionary = {}) -> void:
 	var root := Node3D.new()
 	root.name = "BoardPiece_%d" % board_piece.id
 	root.position = cell_to_world(board_piece.cell)
@@ -286,7 +314,59 @@ func _render_board_piece(board_piece) -> void:
 	var label := _make_world_label("%s%d  HP %d%s" % [type_label, board_piece.id, board_piece.hp, maturity], _label_color(board_piece.player), 34)
 	label.position = Vector3(0.0, 0.9, 0.0)
 	root.add_child(label)
+	_add_status_icons(root, statuses)
 	_entity_root.add_child(root)
+
+
+func _add_status_icons(entity_root: Node3D, statuses: Dictionary) -> void:
+	var status_kinds: Array[String] = []
+	if bool(statuses.get("attack_threat", false)):
+		status_kinds.append("attack_threat")
+	if bool(statuses.get("dual_anchor_protection", false)):
+		status_kinds.append("dual_anchor_protection")
+	if status_kinds.is_empty():
+		return
+
+	var icons_root := Node3D.new()
+	icons_root.name = "StatusIcons"
+	entity_root.add_child(icons_root)
+	for index in range(status_kinds.size()):
+		var icon: Node3D
+		if status_kinds[index] == "attack_threat":
+			icon = _make_warning_icon()
+		else:
+			icon = _make_shield_icon()
+		# From the fixed top-down camera, -Z is screen-up and +X is screen-right.
+		icon.position = Vector3(0.43 - float(index) * 0.31, 1.02, -0.43)
+		icons_root.add_child(icon)
+
+
+func _make_warning_icon() -> Node3D:
+	var root := Node3D.new()
+	root.name = "ThreatWarning"
+	var badge := MeshInstance3D.new()
+	badge.name = "Badge"
+	badge.mesh = _warning_badge_mesh
+	badge.material_override = _warning_badge_material
+	badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(badge)
+	var symbol := _make_world_label("!", Color.WHITE, 34)
+	symbol.name = "Symbol"
+	symbol.position.y = 0.025
+	root.add_child(symbol)
+	return root
+
+
+func _make_shield_icon() -> Node3D:
+	var root := Node3D.new()
+	root.name = "DualProtectionShield"
+	var badge := MeshInstance3D.new()
+	badge.name = "Badge"
+	badge.mesh = _shield_badge_mesh
+	badge.material_override = _shield_badge_material
+	badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(badge)
+	return root
 
 
 func _add_cell_highlight(cell: Vector2i, highlight_kind: String) -> void:
@@ -347,6 +427,30 @@ func _make_material(color: Color, emissive: bool = false) -> StandardMaterial3D:
 	return material
 
 
+func _make_status_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 2.2
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+
+func _make_flat_mesh(points: PackedVector2Array, indices: PackedInt32Array) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	for point: Vector2 in points:
+		vertices.append(Vector3(point.x, 0.0, point.y))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
 func _make_world_label(text: String, color: Color, size: int) -> Label3D:
 	var label := Label3D.new()
 	label.text = text
@@ -357,6 +461,10 @@ func _make_world_label(text: String, color: Color, size: int) -> Label3D:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	return label
+
+
+func _entity_status_key(entity_kind: RuleTypes.EntityKind, entity_id: int) -> String:
+	return "%d:%d" % [entity_kind, entity_id]
 
 
 func _clear_children(parent: Node) -> void:

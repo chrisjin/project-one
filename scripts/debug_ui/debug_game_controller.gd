@@ -399,7 +399,7 @@ func _rebuild_interaction() -> void:
 			_build_movement_interaction()
 		Mode.ACTION:
 			_build_action_interaction()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
+	_refresh_board_view()
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
 	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
@@ -500,7 +500,7 @@ func _refresh_all() -> void:
 	source_actions.clear()
 	legal_main_anchor_ids.clear()
 	cell_highlights.clear()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
+	_refresh_board_view()
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
 	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 	if game_state.is_game_over:
@@ -519,7 +519,7 @@ func _inspect_cell(cell: Vector2i) -> void:
 		selected_entity = entity
 		status_message = "Inspecting %s." % _cell_name(cell)
 		_show_selected_debug()
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
+	_refresh_board_view()
 	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
 
@@ -529,7 +529,7 @@ func _inspect_or_reject(cell: Vector2i, message: String) -> void:
 		selected_entity = entity
 		_show_selected_debug()
 	status_message = "Illegal click: %s" % message
-	board_view.refresh_from_state(game_state, cell_highlights, selected_entity, _selected_binding_visual())
+	_refresh_board_view()
 	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
 
 
@@ -550,6 +550,45 @@ func _selected_binding_visual() -> Dictionary:
 		"anchor_id": anchor_id,
 		"board_piece_ids": anchor_data.bound_board_piece_ids.duplicate(),
 	}
+
+
+func _refresh_board_view() -> void:
+	board_view.refresh_from_state(
+		game_state,
+		cell_highlights,
+		selected_entity,
+		_selected_binding_visual(),
+		_current_player_entity_statuses()
+	)
+
+
+func _current_player_entity_statuses() -> Dictionary:
+	# The board receives presentation flags assembled only from engine-owned queries.
+	var statuses: Dictionary = {}
+	var perspective: RuleTypes.Player = game_state.current_player
+	for threat: Dictionary in rules_engine.compute_attack_threats(game_state, RuleTypes.opponent(perspective)):
+		var target: Dictionary = threat.get("target", {})
+		if target.is_empty() or game_state.entity_player(target) != perspective:
+			continue
+		var target_key := _entity_key(target)
+		if not statuses.has(target_key):
+			statuses[target_key] = {}
+		statuses[target_key]["attack_threat"] = true
+	for board_piece_id: int in game_state.board_pieces:
+		var board_piece = game_state.board_pieces[board_piece_id]
+		if board_piece.player != perspective:
+			continue
+		var debug_data: Dictionary = rules_engine.board_piece_debug(game_state, board_piece_id)
+		if not bool(debug_data.get("dual_anchor_protection", false)):
+			continue
+		var board_piece_key := _entity_key({
+			"kind": RuleTypes.EntityKind.BOARD_PIECE,
+			"id": board_piece_id,
+		})
+		if not statuses.has(board_piece_key):
+			statuses[board_piece_key] = {}
+		statuses[board_piece_key]["dual_anchor_protection"] = true
+	return statuses
 
 
 func _show_selected_debug() -> void:

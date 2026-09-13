@@ -147,6 +147,69 @@ func _run() -> void:
 	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1") != null, "legal 0-HP BoardPiece remains visible")
 	_assert_float(board_view.get_node("Entities/BoardPiece_1").get_child(0).scale.x, 0.64, "0-HP BoardPiece has an obvious reduced-scale visualization")
 
+	var status_state = game.rules_engine.new_game()
+	var status_black_main = Anchor.new(
+		1, RuleTypes.Player.BLACK, Vector2i(1, 1), 0, 1, game.rule_set.anchor_config().max_hp
+	)
+	status_black_main.is_active = true
+	var status_black_secondary = Anchor.new(
+		2, RuleTypes.Player.BLACK, Vector2i(3, 1), 0, 2, game.rule_set.anchor_config().max_hp
+	)
+	status_black_secondary.is_active = true
+	var status_white_anchor = Anchor.new(
+		3, RuleTypes.Player.WHITE, Vector2i(5, 4), 0, 1, game.rule_set.anchor_config().max_hp
+	)
+	status_white_anchor.is_active = true
+	var status_black_piece = BoardPiece.new(
+		1,
+		RuleTypes.Player.BLACK,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(2, 1),
+		1,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	status_black_piece.is_mature = true
+	var status_white_o_piece = BoardPiece.new(
+		2,
+		RuleTypes.Player.WHITE,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(2, 4),
+		3,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	status_white_o_piece.is_mature = true
+	var status_white_d_piece = BoardPiece.new(
+		3,
+		RuleTypes.Player.WHITE,
+		RuleTypes.BoardPieceType.DIAGONAL,
+		Vector2i(5, 3),
+		3,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.DIAGONAL).max_hp
+	)
+	status_white_d_piece.is_mature = true
+	status_state.anchors = {1: status_black_main, 2: status_black_secondary, 3: status_white_anchor}
+	status_state.board_pieces = {1: status_black_piece, 2: status_white_o_piece, 3: status_white_d_piece}
+	status_state.anchors_deployed[RuleTypes.Player.BLACK] = 2
+	status_state.anchors_deployed[RuleTypes.Player.WHITE] = 1
+	game.game_state = game.rules_engine.stabilize(status_state)
+	game._refresh_all()
+	var black_status_icons = board_view.get_node("Entities/BoardPiece_1/StatusIcons")
+	var threat_warning = black_status_icons.get_node_or_null("ThreatWarning")
+	var protection_shield = black_status_icons.get_node_or_null("DualProtectionShield")
+	_assert_true(threat_warning != null, "current-player BoardPiece in an enemy attack path shows a warning")
+	_assert_true(protection_shield != null, "current-player dual-protected BoardPiece shows a golden shield")
+	_assert_true(threat_warning.position.x > protection_shield.position.x, "simultaneous warning and shield badges render one after another")
+	_assert_true(threat_warning.get_node("Badge").material_override.emission_enabled, "attack warning uses a glowing emissive material")
+	_assert_true(board_view.get_node_or_null("Entities/Anchor_2/StatusIcons/ThreatWarning") != null, "current-player Anchor in an enemy attack path shows a warning")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent status signs stay hidden from the current player's perspective")
+	game.game_state.current_player = RuleTypes.Player.WHITE
+	game._refresh_all()
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1/StatusIcons") == null, "changing perspective hides the other player's status signs")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons/ThreatWarning") != null, "new current player receives its own enemy-path warning")
+
 	game.restart_match()
 	game._on_pass_requested()
 	game._on_pass_requested()
