@@ -563,11 +563,14 @@ func _refresh_board_view() -> void:
 
 
 func _current_player_entity_statuses() -> Dictionary:
-	# The board receives presentation flags assembled only from engine-owned queries.
+	# Future opportunities include immature enemies that mature before their next action window.
 	var statuses: Dictionary = {}
 	var perspective: RuleTypes.Player = game_state.current_player
-	for threat: Dictionary in rules_engine.compute_attack_threats(game_state, RuleTypes.opponent(perspective)):
-		var target: Dictionary = threat.get("target", {})
+	for opportunity: Dictionary in rules_engine.compute_attack_opportunities(
+		game_state,
+		RuleTypes.opponent(perspective)
+	):
+		var target: Dictionary = opportunity.get("target", {})
 		if target.is_empty() or game_state.entity_player(target) != perspective:
 			continue
 		var target_key := _entity_key(target)

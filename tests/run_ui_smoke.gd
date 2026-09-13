@@ -179,7 +179,6 @@ func _run() -> void:
 		0,
 		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
 	)
-	status_white_o_piece.is_mature = true
 	var status_white_d_piece = BoardPiece.new(
 		3,
 		RuleTypes.Player.WHITE,
@@ -189,21 +188,21 @@ func _run() -> void:
 		0,
 		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.DIAGONAL).max_hp
 	)
-	status_white_d_piece.is_mature = true
 	status_state.anchors = {1: status_black_main, 2: status_black_secondary, 3: status_white_anchor}
 	status_state.board_pieces = {1: status_black_piece, 2: status_white_o_piece, 3: status_white_d_piece}
 	status_state.anchors_deployed[RuleTypes.Player.BLACK] = 2
 	status_state.anchors_deployed[RuleTypes.Player.WHITE] = 1
 	game.game_state = game.rules_engine.stabilize(status_state)
 	game._refresh_all()
+	_assert_true(game.rules_engine.compute_attack_threats(game.game_state, RuleTypes.Player.WHITE).is_empty(), "status fixture has only immature enemy attackers")
 	var black_status_icons = board_view.get_node("Entities/BoardPiece_1/StatusIcons")
 	var threat_warning = black_status_icons.get_node_or_null("ThreatWarning")
 	var protection_shield = black_status_icons.get_node_or_null("DualProtectionShield")
-	_assert_true(threat_warning != null, "current-player BoardPiece in an enemy attack path shows a warning")
+	_assert_true(threat_warning != null, "immature enemy's next-turn attack path warns the current player's BoardPiece")
 	_assert_true(protection_shield != null, "current-player dual-protected BoardPiece shows a golden shield")
 	_assert_true(threat_warning.position.x > protection_shield.position.x, "simultaneous warning and shield badges render one after another")
 	_assert_true(threat_warning.get_node("Badge").material_override.emission_enabled, "attack warning uses a glowing emissive material")
-	_assert_true(board_view.get_node_or_null("Entities/Anchor_2/StatusIcons/ThreatWarning") != null, "current-player Anchor in an enemy attack path shows a warning")
+	_assert_true(board_view.get_node_or_null("Entities/Anchor_2/StatusIcons/ThreatWarning") != null, "immature enemy's next-turn attack path warns the current player's Anchor")
 	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent status signs stay hidden from the current player's perspective")
 	game.game_state.current_player = RuleTypes.Player.WHITE
 	game._refresh_all()
