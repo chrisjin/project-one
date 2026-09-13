@@ -18,7 +18,7 @@ func _init() -> void:
 		"attack_range": 6,
 		"attack_damage": 2,
 		"movement_type": RuleTypes.MovementType.ORTHOGONAL,
-		"movement_range": 1,
+		"movement_range": 0,
 		"max_hp": 2,
 		"defense": 0,
 		"binding_limit": 0,
