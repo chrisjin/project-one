@@ -156,10 +156,14 @@ func _run() -> void:
 		2, RuleTypes.Player.BLACK, Vector2i(3, 1), 0, 2, game.rule_set.anchor_config().max_hp
 	)
 	status_black_secondary.is_active = true
-	var status_white_anchor = Anchor.new(
-		3, RuleTypes.Player.WHITE, Vector2i(5, 4), 0, 1, game.rule_set.anchor_config().max_hp
+	var status_white_main = Anchor.new(
+		3, RuleTypes.Player.WHITE, Vector2i(3, 4), 0, 1, game.rule_set.anchor_config().max_hp
 	)
-	status_white_anchor.is_active = true
+	status_white_main.is_active = true
+	var status_white_secondary = Anchor.new(
+		4, RuleTypes.Player.WHITE, Vector2i(5, 4), 0, 2, game.rule_set.anchor_config().max_hp
+	)
+	status_white_secondary.is_active = true
 	var status_black_piece = BoardPiece.new(
 		1,
 		RuleTypes.Player.BLACK,
@@ -184,14 +188,34 @@ func _run() -> void:
 		RuleTypes.Player.WHITE,
 		RuleTypes.BoardPieceType.DIAGONAL,
 		Vector2i(5, 3),
-		3,
+		4,
 		0,
 		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.DIAGONAL).max_hp
 	)
-	status_state.anchors = {1: status_black_main, 2: status_black_secondary, 3: status_white_anchor}
-	status_state.board_pieces = {1: status_black_piece, 2: status_white_o_piece, 3: status_white_d_piece}
+	var status_white_protected_piece = BoardPiece.new(
+		4,
+		RuleTypes.Player.WHITE,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(4, 4),
+		3,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	status_white_protected_piece.is_mature = true
+	status_state.anchors = {
+		1: status_black_main,
+		2: status_black_secondary,
+		3: status_white_main,
+		4: status_white_secondary,
+	}
+	status_state.board_pieces = {
+		1: status_black_piece,
+		2: status_white_o_piece,
+		3: status_white_d_piece,
+		4: status_white_protected_piece,
+	}
 	status_state.anchors_deployed[RuleTypes.Player.BLACK] = 2
-	status_state.anchors_deployed[RuleTypes.Player.WHITE] = 1
+	status_state.anchors_deployed[RuleTypes.Player.WHITE] = 2
 	game.game_state = game.rules_engine.stabilize(status_state)
 	game._refresh_all()
 	_assert_true(game.rules_engine.compute_attack_threats(game.game_state, RuleTypes.Player.WHITE).is_empty(), "status fixture has only immature enemy attackers")
@@ -203,11 +227,16 @@ func _run() -> void:
 	_assert_true(threat_warning.position.x > protection_shield.position.x, "simultaneous warning and shield badges render one after another")
 	_assert_true(threat_warning.get_node("Badge").material_override.emission_enabled, "attack warning uses a glowing emissive material")
 	_assert_true(board_view.get_node_or_null("Entities/Anchor_2/StatusIcons/ThreatWarning") != null, "immature enemy's next-turn attack path warns the current player's Anchor")
-	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent status signs stay hidden from the current player's perspective")
+	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent attack warnings stay hidden from the current player's perspective")
+	var enemy_shield_badge: MeshInstance3D = board_view.get_node("Entities/BoardPiece_4/StatusIcons/DualProtectionShield/Badge")
+	_assert_true(enemy_shield_badge.material_override.albedo_color.b > enemy_shield_badge.material_override.albedo_color.r, "opponent dual protection uses a blue shield")
 	game.game_state.current_player = RuleTypes.Player.WHITE
 	game._refresh_all()
-	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_1/StatusIcons") == null, "changing perspective hides the other player's status signs")
+	var former_current_shield: MeshInstance3D = board_view.get_node("Entities/BoardPiece_1/StatusIcons/DualProtectionShield/Badge")
+	_assert_true(former_current_shield.material_override.albedo_color.b > former_current_shield.material_override.albedo_color.r, "perspective change turns the other player's shield blue")
 	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons/ThreatWarning") != null, "new current player receives its own enemy-path warning")
+	var new_current_shield: MeshInstance3D = board_view.get_node("Entities/BoardPiece_4/StatusIcons/DualProtectionShield/Badge")
+	_assert_true(new_current_shield.material_override.albedo_color.r > new_current_shield.material_override.albedo_color.b, "perspective change turns the current player's shield golden")
 
 	game.restart_match()
 	game._on_pass_requested()

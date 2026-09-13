@@ -558,11 +558,11 @@ func _refresh_board_view() -> void:
 		cell_highlights,
 		selected_entity,
 		_selected_binding_visual(),
-		_current_player_entity_statuses()
+		_perspective_entity_statuses()
 	)
 
 
-func _current_player_entity_statuses() -> Dictionary:
+func _perspective_entity_statuses() -> Dictionary:
 	# Future opportunities include immature enemies that mature before their next action window.
 	var statuses: Dictionary = {}
 	var perspective: RuleTypes.Player = game_state.current_player
@@ -579,8 +579,6 @@ func _current_player_entity_statuses() -> Dictionary:
 		statuses[target_key]["attack_threat"] = true
 	for board_piece_id: int in game_state.board_pieces:
 		var board_piece = game_state.board_pieces[board_piece_id]
-		if board_piece.player != perspective:
-			continue
 		var debug_data: Dictionary = rules_engine.board_piece_debug(game_state, board_piece_id)
 		if not bool(debug_data.get("dual_anchor_protection", false)):
 			continue
@@ -591,6 +589,7 @@ func _current_player_entity_statuses() -> Dictionary:
 		if not statuses.has(board_piece_key):
 			statuses[board_piece_key] = {}
 		statuses[board_piece_key]["dual_anchor_protection"] = true
+		statuses[board_piece_key]["enemy_dual_anchor_protection"] = board_piece.player != perspective
 	return statuses
 
 

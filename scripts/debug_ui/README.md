@@ -6,7 +6,7 @@ Run the project from Godot or execute the project binary with `--path .`. The de
 - For O/D placement, click a highlighted physical Main Anchor before choosing the destination.
 - **Pass** is available before using a category; **End Turn** is available afterward.
 - Click an entity without a mode selected to inspect engine-provided diagnostics.
-- The current player's entities in current or next-turn enemy attack paths show a red warning badge; dual-protected BoardPieces show a golden shield badge.
+- The current player's entities in current or next-turn enemy attack paths show a red warning badge. Dual-protected BoardPieces show a golden shield for the current player and a blue shield for the opponent.
 - **Restart** or the `R` key returns to match-mode selection.
 
 The client rebuilds visuals from each returned `GameState`. It does not resolve legality, topology, damage, death, scoring, or other gameplay behavior. Computer turns are chosen by the presentation-free `AnchorMinimaxAi` and submitted through the same rules-engine path as human actions.

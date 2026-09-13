@@ -22,7 +22,8 @@ var _binding_dot_material: StandardMaterial3D
 var _warning_badge_mesh: ArrayMesh
 var _shield_badge_mesh: ArrayMesh
 var _warning_badge_material: StandardMaterial3D
-var _shield_badge_material: StandardMaterial3D
+var _friendly_shield_badge_material: StandardMaterial3D
+var _enemy_shield_badge_material: StandardMaterial3D
 var _binding_paths: Array[Dictionary] = []
 var _binding_flow_distance := 0.0
 
@@ -65,7 +66,8 @@ func _ready() -> void:
 		PackedInt32Array([0, 2, 1, 0, 3, 2, 0, 4, 3])
 	)
 	_warning_badge_material = _make_status_material(Color("ff263b"))
-	_shield_badge_material = _make_status_material(Color("ffc928"))
+	_friendly_shield_badge_material = _make_status_material(Color("ffc928"))
+	_enemy_shield_badge_material = _make_status_material(Color("287cff"))
 
 
 func _process(delta: float) -> void:
@@ -335,7 +337,7 @@ func _add_status_icons(entity_root: Node3D, statuses: Dictionary) -> void:
 		if status_kinds[index] == "attack_threat":
 			icon = _make_warning_icon()
 		else:
-			icon = _make_shield_icon()
+			icon = _make_shield_icon(bool(statuses.get("enemy_dual_anchor_protection", false)))
 		# From the fixed top-down camera, -Z is screen-up and +X is screen-right.
 		icon.position = Vector3(0.43 - float(index) * 0.31, 1.02, -0.43)
 		icons_root.add_child(icon)
@@ -357,13 +359,13 @@ func _make_warning_icon() -> Node3D:
 	return root
 
 
-func _make_shield_icon() -> Node3D:
+func _make_shield_icon(is_enemy: bool) -> Node3D:
 	var root := Node3D.new()
 	root.name = "DualProtectionShield"
 	var badge := MeshInstance3D.new()
 	badge.name = "Badge"
 	badge.mesh = _shield_badge_mesh
-	badge.material_override = _shield_badge_material
+	badge.material_override = _enemy_shield_badge_material if is_enemy else _friendly_shield_badge_material
 	badge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(badge)
 	return root
