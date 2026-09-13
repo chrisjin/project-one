@@ -256,6 +256,11 @@ func _run() -> void:
 			aligned_enemy_paths.append(path)
 	_assert_equal(aligned_enemy_paths.size(), 2, "fixture contains two aligned enemy attack paths")
 	_assert_true(aligned_enemy_paths[0].arrow.position != aligned_enemy_paths[1].arrow.position, "aligned arrows use different animation timing")
+	var threat_animation_time_before_search: float = board_view._threat_flow_distance
+	var background_search: Dictionary = await game._choose_ai_action_in_background(game.game_state.duplicate_state())
+	_assert_true(bool(background_search.get("success", false)), "background minimax search returns a result")
+	_assert_false(bool(background_search.get("ran_on_main_thread", true)), "background minimax search does not run on the rendering thread")
+	_assert_true(board_view._threat_flow_distance > threat_animation_time_before_search, "threat animation advances while minimax is thinking")
 	game.game_state.current_player = RuleTypes.Player.WHITE
 	game._refresh_all()
 	var former_current_shield: MeshInstance3D = board_view.get_node("Entities/BoardPiece_1/StatusIcons/DualProtectionShield/Badge")
@@ -357,6 +362,7 @@ func _run() -> void:
 		5000
 	)
 	_assert_true(ai_returned_to_human, "White AI completes its engine-driven turn")
+	_assert_true(game._last_ai_search_was_background, "minimax search runs outside the rendering main thread")
 	_assert_true(game.game_state.action_log.size() >= 3, "Human pass and the AI turn are recorded in the shared replay log")
 	_assert_true(game._can_accept_human_input(), "controls unlock when Human vs AI returns to Black")
 

@@ -35,6 +35,20 @@ enum MatchMode {
 	AI_VS_AI,
 }
 
+class AiSearchJob extends RefCounted:
+	var ai
+	var state_snapshot
+
+	func _init(configured_ai, configured_state_snapshot) -> void:
+		ai = configured_ai
+		state_snapshot = configured_state_snapshot
+
+	func run() -> Dictionary:
+		return {
+			"action": ai.choose_action(state_snapshot),
+			"ran_on_main_thread": Thread.is_main_thread(),
+		}
+
 const PLACEMENT_NONE := -2
 const PLACE_ANCHOR := -1
 const MAIN_ANCHOR_OPTION_BASE := 1000
@@ -65,6 +79,8 @@ var match_mode: MatchMode = MatchMode.HUMAN_VS_HUMAN
 var match_started := false
 var _ai_running := false
 var _ai_generation := 0
+var _ai_search_threads: Array[Thread] = []
+var _last_ai_search_was_background := false
 
 
 func _ready() -> void:
@@ -80,6 +96,14 @@ func _ready() -> void:
 	hud.match_mode_requested.connect(_start_match)
 	restart_match()
 	_show_match_setup()
+
+
+func _exit_tree() -> void:
+	# Every started Thread must be joined before its final reference is released.
+	for search_thread: Thread in _ai_search_threads.duplicate():
+		if search_thread.is_started():
+			search_thread.wait_to_finish()
+	_ai_search_threads.clear()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -99,6 +123,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func restart_match() -> void:
 	_ai_generation += 1
 	_ai_running = false
+	_last_ai_search_was_background = false
 	game_state = rules_engine.new_game()
 	mode = Mode.NONE
 	placement_choice = PLACEMENT_NONE
@@ -121,6 +146,7 @@ func _start_match(requested_mode: int) -> void:
 func _show_match_setup() -> void:
 	_ai_generation += 1
 	_ai_running = false
+	_last_ai_search_was_background = false
 	match_started = false
 	mode = Mode.NONE
 	placement_choice = PLACEMENT_NONE
@@ -757,10 +783,14 @@ func _run_ai_actions(generation: int) -> void:
 			and _is_ai_player(game_state.current_player):
 		status_message = "%s AI is thinking…" % _player_name(game_state.current_player)
 		_refresh_all()
-		await get_tree().process_frame
-		var action = minimax_ai.choose_action(game_state)
+		var search_result: Dictionary = await _choose_ai_action_in_background(game_state.duplicate_state())
 		if generation != _ai_generation or not match_started:
 			return
+		if not bool(search_result.get("success", false)):
+			status_message = str(search_result.get("error", "AI background search failed."))
+			break
+		_last_ai_search_was_background = not bool(search_result.get("ran_on_main_thread", true))
+		var action = search_result.get("action")
 		if action == null or not _submit_action(action, true):
 			status_message = "AI could not produce an engine-approved action."
 			break
@@ -770,6 +800,42 @@ func _run_ai_actions(generation: int) -> void:
 	_ai_running = false
 	if generation == _ai_generation:
 		_refresh_all()
+
+
+func _choose_ai_action_in_background(state_snapshot) -> Dictionary:
+	# Each worker owns its mutable AI cache and state snapshot; only the immutable rule set is shared.
+	var worker_ai = MinimaxAi.new(
+		rule_set,
+		minimax_ai.search_depth,
+		minimax_ai.max_actions_per_node
+	)
+	var search_job := AiSearchJob.new(worker_ai, state_snapshot)
+	var search_thread := Thread.new()
+	_ai_search_threads.append(search_thread)
+	var start_error := search_thread.start(search_job.run, Thread.PRIORITY_NORMAL)
+	if start_error != OK:
+		_ai_search_threads.erase(search_thread)
+		return {
+			"success": false,
+			"error": "AI background search could not start (error %d)." % start_error,
+		}
+
+	# Polling once per frame keeps rendering and UI animation on the main thread.
+	await get_tree().process_frame
+	while search_thread.is_alive():
+		await get_tree().process_frame
+	var worker_result: Variant = search_thread.wait_to_finish()
+	_ai_search_threads.erase(search_thread)
+	if not worker_result is Dictionary:
+		return {
+			"success": false,
+			"error": "AI background search returned an invalid result.",
+		}
+	return {
+		"success": true,
+		"action": worker_result.get("action"),
+		"ran_on_main_thread": worker_result.get("ran_on_main_thread", true),
+	}
 
 
 func _can_accept_human_input() -> bool:

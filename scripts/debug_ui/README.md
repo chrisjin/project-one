@@ -10,4 +10,4 @@ Run the project from Godot or execute the project binary with `--path .`. The de
 - Transparent animated threat lines use green arrows for the current player's attacks and red arrows for enemy attacks.
 - **Restart** or the `R` key returns to match-mode selection.
 
-The client rebuilds visuals from each returned `GameState`. It does not resolve legality, topology, damage, death, scoring, or other gameplay behavior. Computer turns are chosen by the presentation-free `AnchorMinimaxAi` and submitted through the same rules-engine path as human actions.
+The client rebuilds visuals from each returned `GameState`. It does not resolve legality, topology, damage, death, scoring, or other gameplay behavior. Computer turns are chosen by a presentation-free `AnchorMinimaxAi` worker on a background thread and submitted on the main thread through the same rules-engine path as human actions.
