@@ -91,7 +91,7 @@ For implementation and bug-fix tasks:
 10. Run the narrowest relevant validation first; run broader tests only when justified.
 11. Inspect the final diff for unintended changes.
 12. For bug fixes, verify the reported bug is fixed and check likely regressions.
-13. Commit completed changes with a concise descriptive message prefixed with `[codex]`.
+13. Commit completed changes with a concise descriptive message prefixed with `[codex]` with itemized change list.
 
 Do not perform a full repository review for ordinary incremental tasks.
 
