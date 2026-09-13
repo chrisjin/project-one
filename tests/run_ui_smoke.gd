@@ -202,6 +202,15 @@ func _run() -> void:
 		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
 	)
 	status_white_protected_piece.is_mature = true
+	var status_white_second_attacker = BoardPiece.new(
+		5,
+		RuleTypes.Player.WHITE,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(3, 3),
+		3,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
 	status_state.anchors = {
 		1: status_black_main,
 		2: status_black_secondary,
@@ -213,6 +222,7 @@ func _run() -> void:
 		2: status_white_o_piece,
 		3: status_white_d_piece,
 		4: status_white_protected_piece,
+		5: status_white_second_attacker,
 	}
 	status_state.anchors_deployed[RuleTypes.Player.BLACK] = 2
 	status_state.anchors_deployed[RuleTypes.Player.WHITE] = 2
@@ -230,6 +240,22 @@ func _run() -> void:
 	_assert_true(board_view.get_node_or_null("Entities/BoardPiece_2/StatusIcons") == null, "opponent attack warnings stay hidden from the current player's perspective")
 	var enemy_shield_badge: MeshInstance3D = board_view.get_node("Entities/BoardPiece_4/StatusIcons/DualProtectionShield/Badge")
 	_assert_true(enemy_shield_badge.material_override.albedo_color.b > enemy_shield_badge.material_override.albedo_color.r, "opponent dual protection uses a blue shield")
+	_assert_equal(board_view.get_node("ThreatFlow").get_child_count(), 4, "each engine-reported attack opportunity renders one threat path")
+	var friendly_threat_line: MeshInstance3D = board_view.get_node("ThreatFlow/Threat_0/Line")
+	var enemy_threat_line: MeshInstance3D = board_view.get_node("ThreatFlow/Threat_1/Line")
+	_assert_true(friendly_threat_line.material_override.albedo_color.g > friendly_threat_line.material_override.albedo_color.r, "current-player attack paths use green lines")
+	_assert_true(enemy_threat_line.material_override.albedo_color.r > enemy_threat_line.material_override.albedo_color.g, "enemy attack paths use red lines")
+	_assert_true(friendly_threat_line.material_override.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA, "threat lines use transparent materials")
+	var first_arrow: MeshInstance3D = board_view.get_node("ThreatFlow/Threat_0/Arrow")
+	var first_arrow_position := first_arrow.position
+	board_view._process(0.5)
+	_assert_true(first_arrow.position != first_arrow_position, "each threat path's arrow moves toward its target")
+	var aligned_enemy_paths: Array[Dictionary] = []
+	for path: Dictionary in board_view._threat_paths:
+		if bool(path.is_enemy) and path.direction.z < -0.99:
+			aligned_enemy_paths.append(path)
+	_assert_equal(aligned_enemy_paths.size(), 2, "fixture contains two aligned enemy attack paths")
+	_assert_true(aligned_enemy_paths[0].arrow.position != aligned_enemy_paths[1].arrow.position, "aligned arrows use different animation timing")
 	game.game_state.current_player = RuleTypes.Player.WHITE
 	game._refresh_all()
 	var former_current_shield: MeshInstance3D = board_view.get_node("Entities/BoardPiece_1/StatusIcons/DualProtectionShield/Badge")

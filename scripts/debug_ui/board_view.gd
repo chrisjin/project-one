@@ -1,4 +1,4 @@
-## 3D projection of GameState, engine-approved highlights, and selected Anchor bindings.
+## 3D projection of GameState, engine-approved highlights, bindings, and attack threats.
 class_name AnchorDebugBoardView
 extends Node3D
 
@@ -11,6 +11,7 @@ var map_definition
 var _map_signature := ""
 var _board_root: Node3D
 var _binding_flow_root: Node3D
+var _threat_flow_root: Node3D
 var _highlight_root: Node3D
 var _entity_root: Node3D
 var _black_material: StandardMaterial3D
@@ -24,8 +25,14 @@ var _shield_badge_mesh: ArrayMesh
 var _warning_badge_material: StandardMaterial3D
 var _friendly_shield_badge_material: StandardMaterial3D
 var _enemy_shield_badge_material: StandardMaterial3D
+var _friendly_threat_line_material: StandardMaterial3D
+var _enemy_threat_line_material: StandardMaterial3D
+var _friendly_threat_arrow_material: StandardMaterial3D
+var _enemy_threat_arrow_material: StandardMaterial3D
 var _binding_paths: Array[Dictionary] = []
 var _binding_flow_distance := 0.0
+var _threat_paths: Array[Dictionary] = []
+var _threat_flow_distance := 0.0
 
 
 func _ready() -> void:
@@ -35,6 +42,9 @@ func _ready() -> void:
 	_binding_flow_root = Node3D.new()
 	_binding_flow_root.name = "BindingFlow"
 	add_child(_binding_flow_root)
+	_threat_flow_root = Node3D.new()
+	_threat_flow_root.name = "ThreatFlow"
+	add_child(_threat_flow_root)
 	_highlight_root = Node3D.new()
 	_highlight_root.name = "Highlights"
 	add_child(_highlight_root)
@@ -68,13 +78,19 @@ func _ready() -> void:
 	_warning_badge_material = _make_status_material(Color("ff263b"))
 	_friendly_shield_badge_material = _make_status_material(Color("ffc928"))
 	_enemy_shield_badge_material = _make_status_material(Color("287cff"))
+	_friendly_threat_line_material = _make_status_material(Color(0.12, 0.92, 0.34, 0.28))
+	_enemy_threat_line_material = _make_status_material(Color(1.0, 0.12, 0.18, 0.28))
+	_friendly_threat_arrow_material = _make_status_material(Color(0.18, 1.0, 0.42, 0.78))
+	_enemy_threat_arrow_material = _make_status_material(Color(1.0, 0.18, 0.22, 0.78))
 
 
 func _process(delta: float) -> void:
-	if _binding_paths.is_empty():
-		return
-	_binding_flow_distance += delta * 0.42
-	_update_binding_flow_positions()
+	if not _binding_paths.is_empty():
+		_binding_flow_distance += delta * 0.42
+		_update_binding_flow_positions()
+	if not _threat_paths.is_empty():
+		_threat_flow_distance += delta * 0.72
+		_update_threat_flow_positions()
 
 
 func refresh_from_state(
@@ -82,7 +98,8 @@ func refresh_from_state(
 	cell_highlights: Dictionary = {},
 	selected_entity: Dictionary = {},
 	binding_visual: Dictionary = {},
-	entity_statuses: Dictionary = {}
+	entity_statuses: Dictionary = {},
+	threat_visuals: Array = []
 ) -> void:
 	map_definition = state.map_definition
 	var signature := JSON.stringify(map_definition.canonical_data())
@@ -90,6 +107,7 @@ func refresh_from_state(
 		_map_signature = signature
 		_rebuild_board()
 	_render_binding_flow(state, binding_visual)
+	_render_threat_flow(state, threat_visuals)
 	_clear_children(_highlight_root)
 	_clear_children(_entity_root)
 	for cell: Vector2i in cell_highlights:
@@ -164,6 +182,79 @@ func _update_binding_flow_positions() -> void:
 		for dot_index in range(dots.size()):
 			var distance_along := fposmod(float(dot_index) * float(path.spacing) + _binding_flow_distance, path_distance)
 			dots[dot_index].position = path.start + path.direction * distance_along
+
+
+func _render_threat_flow(state, threat_visuals: Array) -> void:
+	_clear_children(_threat_flow_root)
+	_threat_paths.clear()
+	_threat_flow_distance = 0.0
+	for visual_index in range(threat_visuals.size()):
+		var visual: Dictionary = threat_visuals[visual_index]
+		var attacker_id := int(visual.get("attacker_id", 0))
+		var target: Dictionary = visual.get("target", {})
+		if not state.board_pieces.has(attacker_id) or target.is_empty():
+			continue
+		var source_cell: Vector2i = state.board_pieces[attacker_id].cell
+		var target_cell: Vector2i = state.entity_cell(target)
+		if target_cell.x < 0:
+			continue
+		_add_threat_path(
+			visual_index,
+			cell_to_world(source_cell),
+			cell_to_world(target_cell),
+			bool(visual.get("is_enemy", false))
+		)
+	_update_threat_flow_positions()
+
+
+func _add_threat_path(path_index: int, source: Vector3, target: Vector3, is_enemy: bool) -> void:
+	var full_direction := source.direction_to(target)
+	var start := source + full_direction * 0.34 + Vector3.UP * 0.82
+	var end := target - full_direction * 0.34 + Vector3.UP * 0.82
+	var distance := start.distance_to(end)
+	if distance <= 0.01:
+		return
+
+	var path_root := Node3D.new()
+	path_root.name = "Threat_%d" % path_index
+	_threat_flow_root.add_child(path_root)
+	var line := MeshInstance3D.new()
+	line.name = "Line"
+	var line_mesh := BoxMesh.new()
+	line_mesh.size = Vector3(0.055, 0.018, distance)
+	line.mesh = line_mesh
+	line.material_override = _enemy_threat_line_material if is_enemy else _friendly_threat_line_material
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	path_root.add_child(line)
+	line.position = start.lerp(end, 0.5)
+	line.look_at(end, Vector3.UP)
+
+	var arrow := MeshInstance3D.new()
+	arrow.name = "Arrow"
+	arrow.mesh = _warning_badge_mesh
+	arrow.material_override = _enemy_threat_arrow_material if is_enemy else _friendly_threat_arrow_material
+	arrow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	path_root.add_child(arrow)
+	arrow.position = start
+	arrow.look_at(end, Vector3.UP)
+	_threat_paths.append({
+		"start": start,
+		"direction": start.direction_to(end),
+		"distance": distance,
+		"phase": fposmod(float(path_index) * 0.37, 1.0),
+		"arrow": arrow,
+		"is_enemy": is_enemy,
+	})
+
+
+func _update_threat_flow_positions() -> void:
+	for path: Dictionary in _threat_paths:
+		var path_distance: float = path.distance
+		var distance_along := fposmod(
+			_threat_flow_distance + float(path.phase) * path_distance,
+			path_distance
+		)
+		path.arrow.position = path.start + path.direction * distance_along
 
 
 func cell_to_world(cell: Vector2i) -> Vector3:
@@ -437,6 +528,8 @@ func _make_status_material(color: Color) -> StandardMaterial3D:
 	material.emission = color
 	material.emission_energy_multiplier = 2.2
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	if color.a < 1.0:
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	return material
 
 

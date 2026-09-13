@@ -553,24 +553,46 @@ func _selected_binding_visual() -> Dictionary:
 
 
 func _refresh_board_view() -> void:
+	var threat_visuals := _perspective_threat_visuals()
 	board_view.refresh_from_state(
 		game_state,
 		cell_highlights,
 		selected_entity,
 		_selected_binding_visual(),
-		_perspective_entity_statuses()
+		_perspective_entity_statuses(threat_visuals),
+		threat_visuals
 	)
 
 
-func _perspective_entity_statuses() -> Dictionary:
-	# Future opportunities include immature enemies that mature before their next action window.
-	var statuses: Dictionary = {}
+func _perspective_threat_visuals() -> Array[Dictionary]:
 	var perspective: RuleTypes.Player = game_state.current_player
+	var visuals: Array[Dictionary] = []
+	for opportunity: Dictionary in rules_engine.compute_attack_opportunities(game_state, perspective):
+		visuals.append({
+			"attacker_id": opportunity.attacker_id,
+			"target": opportunity.target.duplicate(),
+			"is_enemy": false,
+		})
 	for opportunity: Dictionary in rules_engine.compute_attack_opportunities(
 		game_state,
 		RuleTypes.opponent(perspective)
 	):
-		var target: Dictionary = opportunity.get("target", {})
+		visuals.append({
+			"attacker_id": opportunity.attacker_id,
+			"target": opportunity.target.duplicate(),
+			"is_enemy": true,
+		})
+	return visuals
+
+
+func _perspective_entity_statuses(threat_visuals: Array[Dictionary]) -> Dictionary:
+	# Future opportunities include immature enemies that mature before their next action window.
+	var statuses: Dictionary = {}
+	var perspective: RuleTypes.Player = game_state.current_player
+	for visual: Dictionary in threat_visuals:
+		if not bool(visual.get("is_enemy", false)):
+			continue
+		var target: Dictionary = visual.get("target", {})
 		if target.is_empty() or game_state.entity_player(target) != perspective:
 			continue
 		var target_key := _entity_key(target)
