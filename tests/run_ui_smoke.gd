@@ -35,6 +35,9 @@ func _run() -> void:
 	_find_button(hud._match_setup_overlay, "Human vs Human").pressed.emit()
 	_assert_false(hud._match_setup_overlay.visible, "choosing a match mode hides the setup menu")
 	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_HUMAN, "Human vs Human selection reaches the match controller")
+	_assert_true(hud._black_stats_label.get_parent().position.x < hud._white_stats_label.get_parent().position.x, "lower right panel splits Black and White summaries into left and right halves")
+	_assert_true(hud._black_stats_label.text.contains("Anchors remaining: 12 / 12"), "Black summary shows remaining and total Anchor deployment count")
+	_assert_true(hud._white_stats_label.text.contains("Pieces on board: 0"), "White summary shows its current board-piece count")
 	_assert_equal(camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "debug camera uses an orthographic top-down projection")
 	var camera_forward := -camera.global_transform.basis.z.normalized()
 	_assert_true(camera_forward.dot(Vector3.DOWN) > 0.999, "debug camera looks straight down at the board")
@@ -105,6 +108,12 @@ func _run() -> void:
 	game._handle_cell_click(Vector2i(1, 2))
 	_assert_equal(game.game_state.anchors[1].cell, Vector2i(1, 2), "Anchor movement submits the exact highlighted engine action")
 	_assert_equal(game.game_state.current_player, RuleTypes.Player.WHITE, "placement plus Anchor movement automatically advances to the other local player")
+	var black_steps: String = hud._black_steps_label.text
+	_assert_true(
+		black_steps.find("Move Anchor #1") < black_steps.find("Place O") \
+				and black_steps.find("Place O") < black_steps.find("Place Anchor"),
+		"Black step trace lists the latest action above historical actions"
+	)
 
 	game._on_placement_requested(-1)
 	game._handle_cell_click(Vector2i(5, 3))
@@ -132,6 +141,8 @@ func _run() -> void:
 	_assert_true(game.cell_actions.has(Vector2i(4, 1)), "attack target highlight comes from the engine ray for a legal action")
 	game._handle_cell_click(Vector2i(4, 1))
 	_assert_false(game.game_state.board_pieces.has(3), "clicking the highlighted attack target resolves engine damage and death")
+	_assert_true(hud._white_stats_label.text.contains("Killed pieces: 1"), "White summary immediately counts its killed BoardPiece")
+	_assert_true(hud._white_stats_label.text.contains("Pieces on board: 0"), "White summary immediately updates its current BoardPiece count")
 
 	var zero_hp_state = game.rules_engine.new_game()
 	var first_anchor = Anchor.new(

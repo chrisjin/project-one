@@ -34,6 +34,10 @@ var _match_mode_label: Label
 var _categories_label: Label
 var _status_label: Label
 var _debug_label: RichTextLabel
+var _black_stats_label: Label
+var _white_stats_label: Label
+var _black_steps_label: RichTextLabel
+var _white_steps_label: RichTextLabel
 var _placement_button: Button
 var _movement_button: Button
 var _action_button: Button
@@ -63,12 +67,15 @@ func refresh(
 	state,
 	legal_actions: Array,
 	status_message: String,
-	gameplay_input_enabled: bool = true
+	gameplay_input_enabled: bool = true,
+	anchor_deployment_limit: int = 12
 ) -> void:
 	var player_name := _player_name(state.current_player)
 	_turn_label.text = "Turn %d  •  %s to play" % [state.turn_number, player_name]
 	_categories_label.text = "Used: %s" % _used_categories_text(state.categories_used)
 	_status_label.text = status_message
+	_refresh_side_summary(state, RuleTypes.Player.BLACK, anchor_deployment_limit, _black_stats_label, _black_steps_label)
+	_refresh_side_summary(state, RuleTypes.Player.WHITE, anchor_deployment_limit, _white_stats_label, _white_steps_label)
 
 	var placement_available := _has_category_action(legal_actions, RuleTypes.ActionCategory.PLACEMENT)
 	var movement_available := _has_category_action(legal_actions, RuleTypes.ActionCategory.MOVEMENT)
@@ -213,15 +220,31 @@ func _build_controls(canvas: Control) -> void:
 	var debug_panel := PanelContainer.new()
 	debug_panel.name = "DebugPanel"
 	debug_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	debug_panel.position = Vector2(-350, 16)
-	debug_panel.size = Vector2(334, 610)
+	debug_panel.position = Vector2(-466, 16)
+	debug_panel.size = Vector2(450, 700)
 	canvas.add_child(debug_panel)
+	var debug_content := VBoxContainer.new()
+	debug_content.add_theme_constant_override("separation", 8)
+	debug_panel.add_child(debug_content)
 	_debug_label = RichTextLabel.new()
 	_debug_label.bbcode_enabled = true
 	_debug_label.fit_content = false
-	_debug_label.custom_minimum_size = Vector2(310, 580)
-	debug_panel.add_child(_debug_label)
+	_debug_label.custom_minimum_size = Vector2(426, 275)
+	_debug_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	debug_content.add_child(_debug_label)
 	clear_entity_debug()
+
+	var separator := HSeparator.new()
+	debug_content.add_child(separator)
+	var side_summaries := HBoxContainer.new()
+	side_summaries.custom_minimum_size = Vector2(426, 350)
+	side_summaries.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side_summaries.add_theme_constant_override("separation", 8)
+	debug_content.add_child(side_summaries)
+	_black_stats_label = _add_side_summary(side_summaries, "BLACK", "Black")
+	var side_separator := VSeparator.new()
+	side_summaries.add_child(side_separator)
+	_white_stats_label = _add_side_summary(side_summaries, "WHITE", "White")
 
 	_game_over_panel = PanelContainer.new()
 	_game_over_panel.name = "GameOverPanel"
@@ -301,6 +324,109 @@ func _build_match_setup(canvas: Control) -> void:
 	for button in [human_match, computer_black_match, computer_white_match, ai_match]:
 		button.custom_minimum_size = Vector2(390, 48)
 		content.add_child(button)
+
+
+func _add_side_summary(parent: HBoxContainer, heading_text: String, node_prefix: String) -> Label:
+	var column := VBoxContainer.new()
+	column.name = "%sSummary" % node_prefix
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", 5)
+	parent.add_child(column)
+	var heading := Label.new()
+	heading.text = heading_text
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 18)
+	column.add_child(heading)
+	var stats := Label.new()
+	stats.name = "%sStats" % node_prefix
+	stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stats.custom_minimum_size = Vector2(194, 120)
+	stats.add_theme_font_size_override("font_size", 14)
+	column.add_child(stats)
+	var steps_heading := Label.new()
+	steps_heading.text = "STEPS · NEWEST FIRST"
+	steps_heading.add_theme_font_size_override("font_size", 12)
+	column.add_child(steps_heading)
+	var steps := RichTextLabel.new()
+	steps.name = "%sSteps" % node_prefix
+	steps.fit_content = false
+	steps.scroll_active = true
+	steps.custom_minimum_size = Vector2(194, 155)
+	steps.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	steps.add_theme_font_size_override("normal_font_size", 13)
+	column.add_child(steps)
+	if node_prefix == "Black":
+		_black_steps_label = steps
+	else:
+		_white_steps_label = steps
+	return stats
+
+
+func _refresh_side_summary(
+	state,
+	player: RuleTypes.Player,
+	anchor_deployment_limit: int,
+	stats_label: Label,
+	steps_label: RichTextLabel
+) -> void:
+	var current_pieces := 0
+	var current_anchors := 0
+	for board_piece in state.board_pieces.values():
+		if board_piece.player == player:
+			current_pieces += 1
+	for anchor in state.anchors.values():
+		if anchor.player == player:
+			current_anchors += 1
+	var deployed_pieces := 0
+	for record: Dictionary in state.action_log:
+		var action: Dictionary = record.get("action", {})
+		if int(record.get("player", -1)) == player \
+				and int(action.get("kind", -1)) == GameplayAction.Kind.PLACE_BOARD_PIECE:
+			deployed_pieces += 1
+	var deployed_anchors: int = int(state.anchors_deployed.get(player, 0))
+	stats_label.text = "\n".join([
+		"Killed pieces: %d" % maxi(0, deployed_pieces - current_pieces),
+		"Killed Anchors: %d" % maxi(0, deployed_anchors - current_anchors),
+		"Pieces on board: %d" % current_pieces,
+		"Anchors on board: %d" % current_anchors,
+		"Anchors remaining: %d / %d" % [maxi(0, anchor_deployment_limit - deployed_anchors), anchor_deployment_limit],
+	])
+	var trace_lines: Array[String] = []
+	for index in range(state.action_log.size() - 1, -1, -1):
+		var record: Dictionary = state.action_log[index]
+		if int(record.get("player", -1)) != player:
+			continue
+		trace_lines.append("T%d · %s" % [int(record.get("turn", 0)), _action_trace(record.get("action", {}))])
+	steps_label.text = "No steps yet." if trace_lines.is_empty() else "\n".join(trace_lines)
+	steps_label.scroll_to_line(0)
+
+
+func _action_trace(action: Dictionary) -> String:
+	match int(action.get("kind", -1)):
+		GameplayAction.Kind.PLACE_ANCHOR:
+			return "Place Anchor %s" % _cell_name(action.get("cell", Vector2i.ZERO))
+		GameplayAction.Kind.PLACE_BOARD_PIECE:
+			var type_name := "O" if int(action.get("board_piece_type", 0)) == RuleTypes.BoardPieceType.ORTHOGONAL else "D"
+			return "Place %s %s" % [type_name, _cell_name(action.get("cell", Vector2i.ZERO))]
+		GameplayAction.Kind.MOVE:
+			var entity_name := "Anchor" if int(action.get("entity_kind", -1)) == RuleTypes.EntityKind.ANCHOR else "Piece"
+			return "Move %s #%d → %s" % [entity_name, int(action.get("entity_id", 0)), _cell_name(action.get("cell", Vector2i.ZERO))]
+		GameplayAction.Kind.ATTACK:
+			return "Attack with Piece #%d" % int(action.get("entity_id", 0))
+		GameplayAction.Kind.RAPID_ACTIVATION:
+			return "Rapid Activate Anchor #%d" % int(action.get("entity_id", 0))
+		GameplayAction.Kind.END_TURN:
+			return "End Turn / Pass"
+	return "Unknown action"
+
+
+func _cell_name(cell: Variant) -> String:
+	var resolved_cell := Vector2i.ZERO
+	if cell is Vector2i:
+		resolved_cell = cell
+	elif cell is Array and cell.size() >= 2:
+		resolved_cell = Vector2i(int(cell[0]), int(cell[1]))
+	return "%s%d" % [String.chr(65 + resolved_cell.x), resolved_cell.y + 1]
 
 
 func _make_button(text: String, callback: Callable) -> Button:

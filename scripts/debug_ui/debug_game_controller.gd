@@ -427,7 +427,7 @@ func _rebuild_interaction() -> void:
 			_build_action_interaction()
 	_refresh_board_view()
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
-	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input(), rule_set.anchor_deployment_limit)
 
 
 func _build_placement_interaction() -> void:
@@ -528,7 +528,7 @@ func _refresh_all() -> void:
 	cell_highlights.clear()
 	_refresh_board_view()
 	hud.set_active_mode(mode as AnchorDebugHud.Mode)
-	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input(), rule_set.anchor_deployment_limit)
 	if game_state.is_game_over:
 		hud.hide_context_menu()
 	if selected_entity.is_empty():
@@ -546,7 +546,7 @@ func _inspect_cell(cell: Vector2i) -> void:
 		status_message = "Inspecting %s." % _cell_name(cell)
 		_show_selected_debug()
 	_refresh_board_view()
-	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input(), rule_set.anchor_deployment_limit)
 
 
 func _inspect_or_reject(cell: Vector2i, message: String) -> void:
@@ -556,7 +556,7 @@ func _inspect_or_reject(cell: Vector2i, message: String) -> void:
 		_show_selected_debug()
 	status_message = "Illegal click: %s" % message
 	_refresh_board_view()
-	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input(), rule_set.anchor_deployment_limit)
 
 
 func _selected_binding_visual() -> Dictionary:
@@ -794,7 +794,7 @@ func _has_automatic_turn_end_event(events: Array[Dictionary]) -> bool:
 
 func _set_feedback(message: String) -> void:
 	status_message = message
-	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input())
+	hud.refresh(game_state, legal_actions, status_message, _can_accept_human_input(), rule_set.anchor_deployment_limit)
 
 
 func _schedule_ai_turn_if_needed() -> void:
