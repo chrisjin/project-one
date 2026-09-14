@@ -18,6 +18,7 @@ var assertion_count := 0
 
 
 func run_all() -> bool:
+	test_same_turn_relocation_preference()
 	test_deterministic_legal_opening()
 	test_equal_opening_choices_can_vary()
 	test_immediate_material_win_is_preferred()
@@ -36,6 +37,31 @@ func run_all() -> bool:
 		push_error(failure)
 	print("FAIL: %d AI failures across %d assertions" % [failures.size(), assertion_count])
 	return false
+
+
+func test_same_turn_relocation_preference() -> void:
+	var initial = engine.new_game()
+	var placed = engine.apply_action(initial, GameplayAction.place_anchor(Vector2i(1, 1))).state
+	var move = GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(2, 1))
+	_assert_true(engine.apply_action(placed, move).success, "same-turn relocation remains legal")
+	_assert_equal(ai._relocation_adjustment(placed, move, RuleTypes.Player.BLACK), -MinimaxAi.SAME_TURN_RELOCATION_PENALTY, "new Anchor relocation has a small cost")
+	_assert_equal(ai._relocation_adjustment(placed, move, RuleTypes.Player.WHITE), MinimaxAi.SAME_TURN_RELOCATION_PENALTY, "opponent relocation cost has the opposite sign")
+	var edge_move = GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(0, 1))
+	_assert_true(engine.apply_action(placed, edge_move).success, "new Anchor can still reach the edge")
+	_assert_equal(ai._relocation_adjustment(placed, edge_move, RuleTypes.Player.BLACK), 0, "deployment-forbidden destination is exempt")
+	var candidates = ai._expanded_candidates(placed, RuleTypes.Player.BLACK, true, true)
+	for candidate: Dictionary in candidates:
+		_assert_equal(
+			ai._candidate_score(candidate, 0, RuleTypes.Player.BLACK, MinimaxAi.MIN_SCORE, MinimaxAi.MAX_SCORE),
+			ai.evaluate_state(candidate.state, RuleTypes.Player.BLACK) + candidate.adjustment,
+			"search retains action cost after automatic turn advancement"
+		)
+	var central_placement = engine.apply_action(initial, GameplayAction.place_anchor(Vector2i(3, 3))).state
+	var focused_ai := MinimaxAi.new(rule_set, 2, 8, false)
+	var action = focused_ai.choose_action(central_placement)
+	_assert_false(action.kind == GameplayAction.Kind.MOVE, "opening Anchor uses a productive second action instead of relocating")
+	placed.anchors[1].deployed_turn = 0
+	_assert_equal(ai._relocation_adjustment(placed, move, RuleTypes.Player.BLACK), 0, "established Anchor movement has no cost")
 
 
 func test_deterministic_legal_opening() -> void:

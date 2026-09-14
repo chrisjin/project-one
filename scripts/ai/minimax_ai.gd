@@ -18,6 +18,8 @@ const MID_GAME_CHILD_ACTION_LIMIT := 6
 const LATE_GAME_ROOT_ACTION_LIMIT := 6
 const LATE_GAME_CHILD_ACTION_LIMIT := 4
 
+const SAME_TURN_RELOCATION_PENALTY := 20
+
 const ANCHOR_BASE_VALUE := 50
 const ANCHOR_HP_VALUE := 20
 const ACTIVE_ANCHOR_BONUS := 10
@@ -74,7 +76,7 @@ func choose_action(state):
 	var best_actions: Array = []
 	var best_score := MIN_SCORE
 	for candidate: Dictionary in candidates:
-		var score := _minimax(candidate.state, effective_depth - 1, root_player, MIN_SCORE, MAX_SCORE)
+		var score := _candidate_score(candidate, effective_depth - 1, root_player, MIN_SCORE, MAX_SCORE)
 		if best_actions.is_empty() or score > best_score:
 			best_actions = [candidate.action]
 			best_score = score
@@ -126,18 +128,40 @@ func _minimax(
 	if maximizing:
 		var best := MIN_SCORE
 		for candidate: Dictionary in candidates:
-			best = maxi(best, _minimax(candidate.state, depth - 1, root_player, alpha, beta))
+			best = maxi(best, _candidate_score(candidate, depth - 1, root_player, alpha, beta))
 			alpha = maxi(alpha, best)
 			if beta <= alpha:
 				break
 		return best
 	var best := MAX_SCORE
 	for candidate: Dictionary in candidates:
-		best = mini(best, _minimax(candidate.state, depth - 1, root_player, alpha, beta))
+		best = mini(best, _candidate_score(candidate, depth - 1, root_player, alpha, beta))
 		beta = mini(beta, best)
 		if beta <= alpha:
 			break
 	return best
+
+
+# Carry action costs through the search, including shifted alpha-beta bounds.
+func _candidate_score(candidate: Dictionary, depth: int, root_player: RuleTypes.Player, alpha: int, beta: int) -> int:
+	var adjustment: int = candidate.adjustment
+	return adjustment + _minimax(candidate.state, depth, root_player, alpha - adjustment, beta - adjustment)
+
+
+# A small preference, never a legality restriction: useful relocation can still win.
+func _relocation_adjustment(state, action, perspective: RuleTypes.Player) -> int:
+	if action.kind != GameplayAction.Kind.MOVE:
+		return 0
+	var entities: Dictionary = state.anchors if action.entity_kind == RuleTypes.EntityKind.ANCHOR else state.board_pieces
+	if not entities.has(action.entity_id):
+		return 0
+	var entity = entities[action.entity_id]
+	if entity.deployed_turn != state.turn_number:
+		return 0
+	# Edge cells may be reachable only by moving after deployment.
+	if action.entity_kind == RuleTypes.EntityKind.ANCHOR and not state.map_definition.is_anchor_valid(action.cell):
+		return 0
+	return -SAME_TURN_RELOCATION_PENALTY if entity.player == perspective else SAME_TURN_RELOCATION_PENALTY
 
 
 func _expanded_candidates(
@@ -148,10 +172,12 @@ func _expanded_candidates(
 ) -> Array[Dictionary]:
 	var expanded: Array[Dictionary] = []
 	for transition: Dictionary in rules_engine.get_legal_transitions(state):
+		var adjustment := _relocation_adjustment(state, transition.action, root_player)
 		expanded.append({
 			"action": transition.action,
 			"state": transition.state,
-			"ordering_score": _evaluate_for_search(transition.state, root_player),
+			"ordering_score": _evaluate_for_search(transition.state, root_player) + adjustment,
+			"adjustment": adjustment,
 		})
 	expanded.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
 		if first.ordering_score == second.ordering_score:

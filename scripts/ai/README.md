@@ -11,3 +11,5 @@ The default search depth is three atomic category actions with up to eight candi
 Search reuses states already resolved by the legal-action query, caches repeated evaluations, and has a deterministic node budget. Crowded positions reduce descendant branching from eight to six. At twelve board entities, search uses depth two, four descendant candidates, and six root candidates. This bounds late-game thinking time without using a machine-dependent timer or changing engine legality.
 
 The AI has no dependency on scenes, rendering, input, or UI code and can be used directly in headless simulations.
+
+Search applies a 20-point action cost to moving an entity deployed during the same turn, favoring direct placement and productive second actions over minor positional gains. The cost participates in candidate ordering and minimax for both players; it never removes legal moves or overrides a larger tactical gain. New Anchor moves to cells that prohibit Anchor deployment are exempt. Base BoardPieces cannot move under the current core rules.
