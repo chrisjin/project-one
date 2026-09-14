@@ -13,3 +13,5 @@ Search reuses states already resolved by the legal-action query, caches repeated
 The AI has no dependency on scenes, rendering, input, or UI code and can be used directly in headless simulations.
 
 Search applies a 20-point action cost to moving an entity deployed during the same turn, favoring direct placement and productive second actions over minor positional gains. The cost participates in candidate ordering and minimax for both players; it never removes legal moves or overrides a larger tactical gain. New Anchor moves to cells that prohibit Anchor deployment are exempt. Base BoardPieces cannot move under the current core rules.
+
+Anchor-threat scoring and the maturity bonus anticipate maturation at the waiting player’s upcoming turn. A newly deployed BoardPiece belonging to the current player still receives neither immediate-threat status nor the maturity bonus. This is an evaluation forecast only; engine attack legality and maturity-dependent survival continue to use the actual state.

@@ -256,7 +256,7 @@ func _side_value(state, player: RuleTypes.Player) -> int:
 		if board_piece.player != player:
 			continue
 		value += BOARD_PIECE_BASE_VALUE + board_piece.hp * BOARD_PIECE_HP_VALUE
-		value += MATURE_BOARD_PIECE_BONUS if board_piece.is_mature else 0
+		value += MATURE_BOARD_PIECE_BONUS if _mature_by_next_action(state, board_piece) else 0
 		if rules_engine.compute_unit_chain_connection(state, board_piece.id):
 			value += DAMAGE_REDUCTION_BONUS
 		if rules_engine.has_dual_anchor_protection(state, board_piece.id):
@@ -310,10 +310,21 @@ func _anchor_value(anchor, bound_count: int, threat_damage: int = -1) -> int:
 	return value
 
 
+# The waiting side matures before it can act; newly deployed current-side pieces do not.
+# This forecasts evaluation only, never current attack legality or 0-HP survival.
+func _mature_by_next_action(state, board_piece) -> bool:
+	return board_piece.is_mature or (
+		board_piece.player != state.current_player
+		and board_piece.deployed_turn < state.turn_number + 1
+	)
+
+
 func _anchor_threat_damage(state, defending_player: RuleTypes.Player) -> Dictionary:
 	var threat_damage: Dictionary = {}
 	var attacking_player := RuleTypes.opponent(defending_player)
-	for threat: Dictionary in rules_engine.compute_attack_threats(state, attacking_player):
+	for threat: Dictionary in rules_engine.compute_attack_opportunities(state, attacking_player):
+		if not _mature_by_next_action(state, state.board_pieces[threat.attacker_id]):
+			continue
 		var target: Dictionary = threat.target
 		if target.kind != RuleTypes.EntityKind.ANCHOR or not state.anchors.has(target.id):
 			continue

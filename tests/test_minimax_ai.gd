@@ -27,6 +27,7 @@ func run_all() -> bool:
 	test_rule_connections_improve_evaluation()
 	test_main_anchor_value_includes_bound_board_pieces()
 	test_board_piece_type_uses_enemy_attack_geometry()
+	test_imminent_maturation_is_evaluated()
 	test_damaged_main_anchor_is_defended()
 	test_late_game_branching_is_bounded()
 	test_headless_ai_sequence_is_reproducible()
@@ -218,6 +219,36 @@ func test_board_piece_type_uses_enemy_attack_geometry() -> void:
 		RuleTypes.BoardPieceType.DIAGONAL,
 		"an enemy on a diagonal attack ray makes D the efficient deployment"
 	)
+
+
+func test_imminent_maturation_is_evaluated() -> void:
+	for defender in [RuleTypes.Player.BLACK, RuleTypes.Player.WHITE]:
+		var attacker_player := RuleTypes.opponent(defender)
+		var state = engine.new_game(MapDefinition.rectangular(5, 3, true))
+		state.current_player = defender
+		state.turn_number = 3
+		_add_anchor(state, 1, defender, Vector2i(4, 1), 1)
+		_add_anchor(state, 2, attacker_player, Vector2i(0, 0))
+		_add_piece(state, 2, attacker_player, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 1), 2)
+		var attacker = state.board_pieces[2]
+		attacker.is_mature = false
+		attacker.deployed_turn = 2
+		_assert_true(engine.compute_attack_threats(state, attacker_player).is_empty(), "engine immediate threats still exclude immature attackers")
+		_assert_true(ai._anchor_threat_damage(state, defender).get(1, 0) >= state.anchors[1].hp, "AI anticipates lethal damage from next-turn maturation for either player")
+		var mature_state = state.duplicate_state()
+		mature_state.board_pieces[2].is_mature = true
+		_assert_equal(ai.evaluate_state(state, defender), ai.evaluate_state(mature_state, defender), "imminent attacker receives threat and readiness value before turn advancement")
+		_assert_false(attacker.is_mature, "forecast does not mutate actual maturity")
+		var advanced = engine.apply_action(state, GameplayAction.end_turn())
+		_assert_true(advanced.success, "fixture can advance to the attacking player's turn")
+		_assert_true(advanced.state.board_pieces[2].is_mature, "engine confirms forecast maturation")
+		_assert_true(engine.apply_action(advanced.state, GameplayAction.attack(2, Vector2i.RIGHT)).success, "forecast attacker can attack on its first action")
+		state.current_player = attacker_player
+		attacker.deployed_turn = state.turn_number
+		_assert_true(ai._anchor_threat_damage(state, defender).is_empty(), "current-turn deployment is not an immediate Anchor threat")
+		_assert_false(ai._mature_by_next_action(state, attacker), "current-turn deployment receives no readiness bonus")
+		attacker.is_mature = true
+		_assert_true(ai._anchor_threat_damage(state, defender).has(1), "mature current-player attacker remains a threat")
 
 
 func test_damaged_main_anchor_is_defended() -> void:
