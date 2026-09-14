@@ -70,6 +70,7 @@ func _run() -> void:
 		return
 	_assert_false(game.game_state.anchors[1].is_active, "new Anchor visualization receives inactive engine state")
 	_assert_float(board_view.get_node("Entities/Anchor_1").get_child(0).scale.x, 0.74, "inactive Anchor renders at reduced scale")
+	_assert_equal(board_view.get_node("Entities/Anchor_1/RemainingPieces").text, "3", "new Anchor shows all three remaining BoardPiece slots")
 
 	game._on_mode_requested(3)
 	game._handle_cell_click(Vector2i(1, 1))
@@ -88,6 +89,7 @@ func _run() -> void:
 	game._handle_cell_click(Vector2i(2, 1))
 	_assert_true(game.game_state.board_pieces.has(1), "O BoardPiece placement reaches the engine")
 	_assert_equal(game.game_state.board_pieces[1].main_anchor_id, 1, "selected physical Main Anchor is preserved by the engine")
+	_assert_equal(board_view.get_node("Entities/Anchor_1/RemainingPieces").text, "2", "Anchor slot count updates immediately after binding a BoardPiece")
 	_assert_true(hud._categories_label.text.contains("Placement"), "consumed action category is displayed")
 	_assert_true(hud._placement_button.disabled, "consumed action category is visually disabled")
 	game._on_mode_requested(2)
@@ -400,6 +402,7 @@ func _run() -> void:
 	game._refresh_all()
 	game._handle_cell_click(Vector2i(1, 2), Vector2(420, 300))
 	_assert_true(_context_button(hud, "Placement") == null, "full-capacity Anchor context omits Placement using engine debug capacity data")
+	_assert_equal(board_view.get_node("Entities/Anchor_1/RemainingPieces").text, "0", "full Anchor shows zero remaining BoardPiece slots")
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "selecting an Anchor shows every BoardPiece physically bound to it")
 
 	game._on_context_option_requested(DebugController.ContextOption.ANCHOR_MOVE)

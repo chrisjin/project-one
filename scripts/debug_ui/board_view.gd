@@ -378,6 +378,14 @@ func _render_anchor(anchor, statuses: Dictionary = {}) -> void:
 	var label := _make_world_label("A%d  HP %d%s" % [anchor.id, anchor.hp, status], _label_color(anchor.player), 34)
 	label.position = Vector3(0.0, 0.92, 0.0)
 	root.add_child(label)
+	var remaining_slots := _make_world_label(
+		str(int(statuses.get("remaining_binding_slots", 0))),
+		_label_color(anchor.player),
+		28
+	)
+	remaining_slots.name = "RemainingPieces"
+	remaining_slots.position = Vector3(-0.43, 0.10, 0.43)
+	root.add_child(remaining_slots)
 	_add_status_icons(root, statuses)
 	_entity_root.add_child(root)
 

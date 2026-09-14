@@ -625,6 +625,18 @@ func _perspective_entity_statuses(threat_visuals: Array[Dictionary]) -> Dictiona
 		if not statuses.has(target_key):
 			statuses[target_key] = {}
 		statuses[target_key]["attack_threat"] = true
+	for anchor_id: int in game_state.anchors:
+		var anchor_data: Dictionary = rules_engine.anchor_debug(game_state, anchor_id)
+		var anchor_key := _entity_key({
+			"kind": RuleTypes.EntityKind.ANCHOR,
+			"id": anchor_id,
+		})
+		if not statuses.has(anchor_key):
+			statuses[anchor_key] = {}
+		statuses[anchor_key]["remaining_binding_slots"] = maxi(
+			0,
+			int(anchor_data.binding_capacity) - int(anchor_data.bound_board_piece_count)
+		)
 	for board_piece_id: int in game_state.board_pieces:
 		var board_piece = game_state.board_pieces[board_piece_id]
 		var debug_data: Dictionary = rules_engine.board_piece_debug(game_state, board_piece_id)
