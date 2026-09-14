@@ -810,7 +810,8 @@ func _choose_ai_action_in_background(state_snapshot) -> Dictionary:
 	var worker_ai = MinimaxAi.new(
 		rule_set,
 		minimax_ai.search_depth,
-		minimax_ai.max_actions_per_node
+		minimax_ai.max_actions_per_node,
+		minimax_ai.randomize_ties
 	)
 	var search_job := AiSearchJob.new(worker_ai, state_snapshot)
 	var search_thread := Thread.new()

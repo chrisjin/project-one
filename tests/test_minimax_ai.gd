@@ -12,13 +12,14 @@ const MinimaxAi = preload("res://scripts/ai/minimax_ai.gd")
 
 var rule_set := CoreRuleSet.new()
 var engine := RulesEngine.new(rule_set)
-var ai := MinimaxAi.new(rule_set)
+var ai := MinimaxAi.new(rule_set, 3, 8, false)
 var failures: Array[String] = []
 var assertion_count := 0
 
 
 func run_all() -> bool:
 	test_deterministic_legal_opening()
+	test_equal_opening_choices_can_vary()
 	test_immediate_material_win_is_preferred()
 	test_only_legal_turn_transition_is_returned()
 	test_coordinates_have_no_intrinsic_value()
@@ -48,6 +49,16 @@ func test_deterministic_legal_opening() -> void:
 	_assert_equal(state.action_log.size(), 0, "search simulations do not leak into the input action log")
 	_assert_true(engine.apply_action(state, first_action).success, "chosen opening action is accepted by the rules engine")
 	_assert_equal(first_action.kind, GameplayAction.Kind.PLACE_ANCHOR, "heuristic AI establishes a Main Anchor instead of opening with Pass")
+
+
+func test_equal_opening_choices_can_vary() -> void:
+	var random_ai := MinimaxAi.new(rule_set, 1, 64, true)
+	random_ai._rng.seed = 12345
+	var state = engine.new_game()
+	var chosen_actions: Dictionary = {}
+	for index in range(8):
+		chosen_actions[JSON.stringify(random_ai.choose_action(state).to_dictionary())] = true
+	_assert_true(chosen_actions.size() > 1, "random tie-breaking varies equally scored opening moves")
 
 
 func test_immediate_material_win_is_preferred() -> void:

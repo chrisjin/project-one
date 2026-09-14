@@ -1,4 +1,4 @@
-## Deterministic bounded minimax player operating only through the headless rules engine.
+## Bounded minimax player with optional random tie-breaking between equally scored moves.
 class_name AnchorMinimaxAi
 extends "res://scripts/ai/gameplay_ai.gd"
 
@@ -41,16 +41,25 @@ const MAX_SCORED_LIBERTIES_PER_GROUP := 6
 var rules_engine
 var search_depth: int
 var max_actions_per_node: int
+var randomize_ties: bool
 var last_search_node_count := 0
 var _search_node_count := 0
 var _evaluation_cache: Dictionary = {}
+var _rng := RandomNumberGenerator.new()
 
 
-func _init(configured_rule_set: RuleSet = null, depth: int = 3, action_limit: int = 8) -> void:
+func _init(
+	configured_rule_set: RuleSet = null,
+	depth: int = 3,
+	action_limit: int = 8,
+	should_randomize_ties: bool = true
+) -> void:
 	super(configured_rule_set if configured_rule_set != null else CoreRuleSet.new())
 	rules_engine = RulesEngine.new(rule_set)
 	search_depth = maxi(1, depth)
 	max_actions_per_node = maxi(2, action_limit)
+	randomize_ties = should_randomize_ties
+	_rng.randomize()
 
 
 func choose_action(state):
@@ -62,18 +71,28 @@ func choose_action(state):
 	var root_player: RuleTypes.Player = state.current_player
 	var effective_depth := _search_depth_for_state(state)
 	var candidates := _expanded_candidates(state, root_player, true, true)
-	var best_action = null
+	var best_actions: Array = []
 	var best_score := MIN_SCORE
-	var best_key := ""
 	for candidate: Dictionary in candidates:
 		var score := _minimax(candidate.state, effective_depth - 1, root_player, MIN_SCORE, MAX_SCORE)
-		var choice_key := _choice_key(candidate.action)
-		if best_action == null or score > best_score or (score == best_score and choice_key < best_key):
-			best_action = candidate.action
+		if best_actions.is_empty() or score > best_score:
+			best_actions = [candidate.action]
 			best_score = score
-			best_key = choice_key
+		elif score == best_score:
+			best_actions.append(candidate.action)
 	last_search_node_count = _search_node_count
-	return best_action
+	if best_actions.is_empty():
+		return null
+	# Preserve End Turn as the safe choice over an equally valued aimless action.
+	for action in best_actions:
+		if action.kind == GameplayAction.Kind.END_TURN:
+			return action
+	if randomize_ties and best_actions.size() > 1:
+		return best_actions[_rng.randi_range(0, best_actions.size() - 1)]
+	best_actions.sort_custom(func(first, second) -> bool:
+		return _choice_key(first) < _choice_key(second)
+	)
+	return best_actions[0]
 
 
 func evaluate_state(state, perspective: RuleTypes.Player) -> int:
