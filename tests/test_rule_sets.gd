@@ -36,6 +36,7 @@ func test_core_rule_set_matches_current_game() -> void:
 	var anchor_config = rules.anchor_config()
 	var o_config = rules.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL)
 	var d_config = rules.board_piece_config(RuleTypes.BoardPieceType.DIAGONAL)
+	var spirit_config = rules.board_piece_config(RuleTypes.BoardPieceType.PIECE_SPIRIT)
 	_assert_equal(rules.standard_board_size, Vector2i(7, 7), "core rules retain the standard 7x7 board")
 	_assert_equal(rules.max_categories_per_turn, 2, "core rules retain two distinct categories per turn")
 	_assert_equal(rules.anchor_deployment_limit, 12, "core rules retain the physical Anchor deployment limit")
@@ -45,6 +46,8 @@ func test_core_rule_set_matches_current_game() -> void:
 	_assert_equal(anchor_config.max_hp, 3, "core Anchors retain 3 maximum HP")
 	_assert_equal(anchor_config.defense, 0, "core Anchors retain zero innate defense")
 	_assert_equal(anchor_config.binding_limit, 3, "core Anchors retain three binding slots")
+	_assert_equal(anchor_config.attack_blocking_type, RuleTypes.AttackBlockingType.ENEMY, "core Anchors block enemy attacks only")
+	_assert_true(anchor_config.targetable, "core Anchors remain targetable by enemies")
 	_assert_equal(o_config.attack_type, RuleTypes.AttackType.ORTHOGONAL, "O retains orthogonal attack geometry")
 	_assert_equal(d_config.attack_type, RuleTypes.AttackType.DIAGONAL, "D retains diagonal attack geometry")
 	for config in [o_config, d_config]:
@@ -60,6 +63,16 @@ func test_core_rule_set_matches_current_game() -> void:
 			1,
 			"base BoardPieces retain one Main Anchor unit-chain damage reduction"
 		)
+		_assert_equal(config.attack_blocking_type, RuleTypes.AttackBlockingType.ENEMY, "positive-HP base BoardPieces block enemy attacks only")
+		_assert_true(config.targetable, "positive-HP base BoardPieces remain targetable")
+	_assert_equal(spirit_config.attack_type, RuleTypes.AttackType.NONE, "PieceSpirit has no attack geometry")
+	_assert_equal(spirit_config.attack_range, 0, "PieceSpirit has zero attack range")
+	_assert_equal(spirit_config.attack_damage, 0, "PieceSpirit deals zero attack damage")
+	_assert_equal(spirit_config.movement_type, RuleTypes.MovementType.NONE, "PieceSpirit has no movement geometry")
+	_assert_equal(spirit_config.movement_range, 0, "PieceSpirit cannot move")
+	_assert_equal(spirit_config.max_hp, 0, "PieceSpirit represents the protected 0-HP state")
+	_assert_equal(spirit_config.attack_blocking_type, RuleTypes.AttackBlockingType.BOTH, "PieceSpirit blocks both players' attacks")
+	_assert_false(spirit_config.targetable, "PieceSpirit cannot be targeted")
 
 
 func test_rule_set_collections_are_immutable_copies() -> void:
@@ -167,6 +180,14 @@ func test_configured_geometry_damage_and_binding_are_authoritative() -> void:
 	)
 	_assert_true(anchor_movement_result.success, "Anchor movement also comes from its entity configuration")
 	_assert_equal(anchor_movement_result.state.anchors[1].cell, Vector2i(2, 3), "configured Anchor diagonal range is authoritative")
+	var blocking_state = configured_engine.new_game(MapDefinition.rectangular(5, 4, true))
+	_add_anchor(blocking_state, rules, 1, RuleTypes.Player.BLACK, Vector2i(1, 1))
+	_add_piece(blocking_state, rules, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 0), 1)
+	_add_anchor(blocking_state, rules, 2, RuleTypes.Player.WHITE, Vector2i(2, 2))
+	_assert_true(
+		configured_engine.trace_ray(blocking_state, 1, Vector2i(1, 1)).target.is_empty(),
+		"an alternate BOTH-configured friendly Anchor blocks its owner's attack"
+	)
 
 	var binding_state = configured_engine.new_game(MapDefinition.rectangular(5, 4, true))
 	_add_anchor(binding_state, rules, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
@@ -202,6 +223,8 @@ func test_ai_instances_use_their_rule_sets() -> void:
 func _alternate_rule_set() -> RuleSet:
 	var anchor_config := RuleSet.EntityConfig.new({
 		"attack_type": RuleTypes.AttackType.NONE,
+		"attack_blocking_type": RuleTypes.AttackBlockingType.BOTH,
+		"targetable": true,
 		"movement_type": RuleTypes.MovementType.DIAGONAL,
 		"movement_range": 2,
 		"max_hp": 5,
@@ -211,6 +234,8 @@ func _alternate_rule_set() -> RuleSet:
 	var shared_piece_values := {
 		"attack_range": 2,
 		"attack_damage": 4,
+		"attack_blocking_type": RuleTypes.AttackBlockingType.ENEMY,
+		"targetable": true,
 		"movement_type": RuleTypes.MovementType.DIAGONAL,
 		"movement_range": 2,
 		"max_hp": 4,

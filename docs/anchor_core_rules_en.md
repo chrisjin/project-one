@@ -23,7 +23,7 @@
   - spatial control.
 - At game end:
   - each surviving positive-HP BoardPiece scores 1 point;
-  - each legally surviving 0-HP BoardPiece also scores 1 point;
+  - each legally surviving PieceSpirit also scores 1 point;
   - Anchors do not score.
 - Higher BoardPiece count wins.
 - Equal BoardPiece counts are a draw.
@@ -130,6 +130,7 @@ Current base BoardPiece / Anchor types:
 1. Anchor
 2. Orthogonal BoardPiece O
 3. Diagonal BoardPiece D
+4. PieceSpirit, the protected 0-HP form of an O or D BoardPiece
 
 Suggested notation:
 
@@ -141,8 +142,8 @@ Suggested notation:
 | `BD` | Black Diagonal BoardPiece |
 | `WO` | White Orthogonal BoardPiece |
 | `WD` | White Diagonal BoardPiece |
-| `BO0 / BD0` | Black 0-HP BoardPiece |
-| `WO0 / WD0` | White 0-HP BoardPiece |
+| `BS(O) / BS(D)` | Black PieceSpirit, originally O / D |
+| `WS(O) / WS(D)` | White PieceSpirit, originally O / D |
 
 ---
 
@@ -188,6 +189,26 @@ Each physical Anchor:
 - Maximum range: **6 grid steps**
 
 > O and D differ only in attack geometry. Neither base BoardPiece can move in the current core game.
+
+---
+
+## 3.4 PieceSpirit
+
+PieceSpirit is not directly deployable. When a mature O or D BoardPiece reaches 0 HP and satisfies the 0-HP survival conditions in Section 7, it becomes a PieceSpirit while retaining:
+
+- its BoardPiece ID;
+- owner;
+- cell;
+- physical Main Anchor binding;
+- original O or D type as recorded state.
+
+A PieceSpirit:
+
+- has 0 HP;
+- has no attack and 0 attack range;
+- cannot move;
+- is not targetable;
+- blocks both players' attack rays.
 
 ---
 
@@ -252,7 +273,7 @@ This is true regardless of:
 - remaining HP;
 - other connected Anchors;
 - Secondary Anchor protection;
-- 0-HP immortal status.
+- PieceSpirit status.
 
 ---
 
@@ -267,7 +288,8 @@ An Anchor deployed this turn is:
 It still immediately:
 
 - occupies its cell;
-- blocks rays;
+- blocks enemy rays and remains targetable by enemy attacks;
+- does not block friendly normal attack rays;
 - participates in friendly orthogonal connectivity;
 - participates in Anchor Cluster geometry;
 - participates in liberty calculations.
@@ -500,18 +522,19 @@ A BoardPiece reduced to 0 HP remains on the board only if all are true:
 
 If all are true:
 
-> the BoardPiece remains as a 0-HP BoardPiece.
+> the BoardPiece becomes a PieceSpirit representing its surviving 0-HP state.
 
 ---
 
-## 7.5 0-HP BoardPiece State
+## 7.5 PieceSpirit State
 
-A legal 0-HP BoardPiece:
+A legal PieceSpirit:
 
 - continues occupying its cell;
 - still scores 1 point;
 - still participates in friendly orthogonal connectivity;
 - blocks both players' rays;
+- cannot be targeted;
 - cannot move;
 - cannot attack.
 
@@ -519,7 +542,7 @@ A legal 0-HP BoardPiece:
 
 ## 7.6 Losing Protection
 
-A 0-HP BoardPiece dies immediately if:
+A PieceSpirit dies immediately if:
 
 - its Main Anchor dies;
 - Main Anchor supply is cut;
@@ -527,7 +550,7 @@ A 0-HP BoardPiece dies immediately if:
 - its Secondary Anchor connection is cut;
 - the Main and Secondary Clusters merge into one Cluster.
 
-A removed 0-HP BoardPiece does not revive later.
+A removed PieceSpirit does not revive later.
 
 ---
 
@@ -540,7 +563,7 @@ Friendly board entities connected by orthogonal adjacency form one friendly grou
 A group may contain:
 
 - positive-HP BoardPieces;
-- legal 0-HP BoardPieces;
+- legal PieceSpirits;
 - Anchors;
 - immature BoardPieces;
 - inactive Anchors.
@@ -889,7 +912,7 @@ Recalculate until stable:
 - Main Anchor unit-chain connection;
 - Anchor Clusters;
 - Secondary Anchors;
-- 0-HP BoardPieces;
+- PieceSpirits;
 - liberties;
 - death cascades.
 
@@ -1117,6 +1140,13 @@ Moving one Anchor may therefore cause many bound BoardPieces to:
 
 # 14. Attack Rays and Blocking
 
+Every board entity's immutable configuration defines:
+
+- `AttackBlockingType`: whether it blocks attacks from its owner, its owner's enemy, both, or neither;
+- `Targetable`: whether an enemy attack may select it as a target.
+
+Blocking is evaluated relative to the blocking entity's owner. A ray passes through an entity that does not block that attack. A blocking entity always stops the ray, but becomes the target only when it is an enemy with `Targetable` enabled.
+
 ## 14.1 O
 
 O attacks along:
@@ -1149,27 +1179,27 @@ up to:
 
 ---
 
-## 14.3 Friendly Positive-HP BoardPieces Are Transparent
+## 14.3 Friendly O and D BoardPieces Are Transparent
 
-Friendly positive-HP BoardPieces:
+Friendly O and D BoardPieces:
 
 > do not block friendly normal attack rays.
 
 ---
 
-## 14.4 Friendly 0-HP BoardPieces Block
+## 14.4 PieceSpirits Block Both Players
 
-Friendly 0-HP BoardPieces:
+PieceSpirits:
 
-> block friendly rays.
+> block both friendly and enemy rays but never become an attack target.
 
 ---
 
-## 14.5 Friendly Anchors Block
+## 14.5 Friendly Anchors Are Transparent
 
 Friendly Anchors:
 
-> always block friendly normal attack rays.
+> do not block friendly normal attack rays.
 
 This is true regardless of:
 
@@ -1178,20 +1208,23 @@ This is true regardless of:
 
 ---
 
-## 14.6 The First Enemy Board Entity Is the Target
+Enemy Anchors still block the ray and may be targeted.
 
-When a ray reaches the first enemy unit:
+---
+
+## 14.6 The First Targetable Enemy Board Entity Is the Target
+
+When a ray reaches the first targetable enemy board entity configured to block that player's attack:
 
 - the ray stops;
 - that unit becomes the target.
 
 Enemy:
 
-- positive-HP BoardPieces;
-- 0-HP BoardPieces;
+- O and D BoardPieces;
 - Anchors;
 
-all follow this rule.
+follow this rule. A PieceSpirit blocks the ray but is not targetable, so no attack is legal along that ray unless another direction has a target.
 
 ---
 
@@ -1260,7 +1293,7 @@ When a physical Main Anchor is destroyed:
 4. recalculate Main Anchor supply;
 5. recalculate damage-reduction connections;
 6. recalculate Secondary Anchors;
-7. recalculate 0-HP BoardPieces;
+7. recalculate PieceSpirits and 0-HP survival;
 8. recalculate liberties;
 9. continue cascading until stable.
 
@@ -1283,12 +1316,13 @@ Recommended implementation order:
 7. remove BoardPieces whose supply has been cut;
 8. recalculate Main Anchor unit-chain damage reduction;
 9. recalculate Secondary Anchors;
-10. remove 0-HP BoardPieces that lost protection;
-11. recalculate liberties;
-12. resolve no-liberty BoardPieces;
-13. if deaths changed topology again, repeat from step 4;
-14. continue until stable;
-15. only then allow the turn's second category.
+10. convert newly protected 0-HP O / D BoardPieces into PieceSpirits;
+11. remove 0-HP BoardPieces or PieceSpirits that lack valid protection;
+12. recalculate liberties;
+13. resolve no-liberty BoardPieces;
+14. if deaths changed topology again, repeat from step 4;
+15. continue until stable;
+16. only then allow the turn's second category.
 
 Anchor no-liberty behavior follows the fixed Section 8 sequence: resolve Supply first, then No-Liberty, and repeat until stable.
 
@@ -1373,7 +1407,7 @@ Every legally surviving BoardPiece scores:
 including:
 
 - positive-HP BoardPieces;
-- legal 0-HP BoardPieces.
+- legal PieceSpirits.
 
 Anchors score:
 
@@ -1404,11 +1438,11 @@ Higher score wins; equal score is a draw.
 15. Only a continuous friendly-unit chain to the Main Anchor grants 1 damage reduction; empty-space supply does not.
 16. A valid Secondary Anchor Cluster must be a different active Cluster.
 17. Secondary Anchors provide 0-HP survival, not damage reduction.
-18. A legal 0-HP BoardPiece still occupies space, scores, connects, and blocks rays, but cannot attack; like every base BoardPiece, it cannot move.
+18. A protected 0-HP O / D BoardPiece becomes a PieceSpirit that retains its ID, owner, cell, Main Anchor binding, and original type.
 19. After Supply resolves, an Anchor that remains orthogonally connected to a legal dual-Anchor-protected BoardPiece survives with that zero-liberty structure; only when the entire friendly connected group contains no such BoardPiece do we check pure Anchor / Anchor Cluster zero-liberty death.
-20. Friendly positive-HP BoardPieces are transparent to friendly normal rays.
-21. Friendly 0-HP BoardPieces and friendly Anchors block friendly normal rays.
-22. The first enemy unit blocks the ray and becomes the target.
+20. Friendly O / D BoardPieces and friendly Anchors are transparent to friendly normal rays.
+21. PieceSpirits block both players' rays and are not targetable.
+22. The first targetable enemy O / D BoardPiece or Anchor configured to block the attack becomes the target.
 23. Destroying a Main Anchor immediately kills all BoardPieces bound to it.
 24. A normal BoardPiece cannot successfully invade a fully sealed area if its Main Anchor remains outside; a new internal Anchor is normally required.
 25. Future special-BoardPiece cards still consume Placement; movement-effect cards consume Movement; attack/skill-effect cards consume Action.

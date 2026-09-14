@@ -12,6 +12,8 @@ var hp: int
 var is_mature: bool = false
 var main_anchor_id: int
 var deployed_turn: int
+# Populated only after an O or D BoardPiece becomes a PieceSpirit.
+var original_board_piece_type: int = -1
 
 
 func _init(
@@ -35,8 +37,20 @@ func _init(
 func duplicate_state() -> BoardPieceState:
 	var copy := BoardPieceState.new(id, player, board_piece_type, cell, main_anchor_id, deployed_turn, hp)
 	copy.is_mature = is_mature
+	copy.original_board_piece_type = original_board_piece_type
 	return copy
 
 
 func canonical_data() -> Array:
-	return [id, player, board_piece_type, cell.x, cell.y, hp, is_mature, main_anchor_id, deployed_turn]
+	return [
+		id,
+		player,
+		board_piece_type,
+		original_board_piece_type,
+		cell.x,
+		cell.y,
+		hp,
+		is_mature,
+		main_anchor_id,
+		deployed_turn,
+	]

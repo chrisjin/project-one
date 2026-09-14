@@ -650,10 +650,12 @@ func _show_selected_debug() -> void:
 		return
 	if selected_entity.kind == RuleTypes.EntityKind.BOARD_PIECE:
 		var data := rules_engine.board_piece_debug(game_state, selected_entity.id)
-		var type_name := "O" if data.board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL else "D"
-		hud.show_entity_debug("%s BoardPiece #%d" % [type_name, data.board_piece_id], [
+		var type_name := _board_piece_type_name(data.board_piece_type)
+		var details: Array[String] = [
 			"Owner: %s" % _player_name(data.owner),
 			"HP: %d" % data.hp,
+			"Targetable: %s" % _yes_no(data.targetable),
+			"Attack blocking: %s" % _attack_blocking_name(data.attack_blocking_type),
 			"Maturity: %s" % ("mature" if data.is_mature else "immature"),
 			"Main Anchor ID: %d" % data.main_anchor_id,
 			"Main Anchor alive: %s" % _yes_no(data.main_anchor_alive),
@@ -664,12 +666,17 @@ func _show_selected_debug() -> void:
 			"0-HP protection: %s" % _yes_no(data.zero_hp_protection_valid),
 			"Friendly group: %s" % data.friendly_group_id,
 			"Liberties: %d" % data.liberty_count,
-		])
+		]
+		if data.board_piece_type == RuleTypes.BoardPieceType.PIECE_SPIRIT:
+			details.insert(1, "Original type: %s" % _board_piece_type_name(data.original_board_piece_type))
+		hud.show_entity_debug("%s BoardPiece #%d" % [type_name, data.board_piece_id], details)
 	else:
 		var data := rules_engine.anchor_debug(game_state, selected_entity.id)
 		hud.show_entity_debug("Anchor #%d" % data.anchor_id, [
 			"Owner: %s" % _player_name(data.owner),
 			"HP: %d" % data.hp,
+			"Targetable: %s" % _yes_no(data.targetable),
+			"Attack blocking: %s" % _attack_blocking_name(data.attack_blocking_type),
 			"Activation: %s" % ("active" if data.is_active else "inactive"),
 			"AnchorCluster ID: %d" % data.anchor_cluster_id,
 			"Bound BoardPieces: %s" % str(data.bound_board_piece_ids),
@@ -678,6 +685,30 @@ func _show_selected_debug() -> void:
 			"Zero liberties: %s" % _yes_no(data.zero_liberty),
 			"Protected group: %s" % _yes_no(data.protected_group_membership),
 		])
+
+
+func _board_piece_type_name(board_piece_type: int) -> String:
+	match board_piece_type:
+		RuleTypes.BoardPieceType.ORTHOGONAL:
+			return "O"
+		RuleTypes.BoardPieceType.DIAGONAL:
+			return "D"
+		RuleTypes.BoardPieceType.PIECE_SPIRIT:
+			return "PieceSpirit"
+	return "Unknown"
+
+
+func _attack_blocking_name(blocking_type: int) -> String:
+	match blocking_type:
+		RuleTypes.AttackBlockingType.NONE:
+			return "none"
+		RuleTypes.AttackBlockingType.SELF:
+			return "self"
+		RuleTypes.AttackBlockingType.ENEMY:
+			return "enemy"
+		RuleTypes.AttackBlockingType.BOTH:
+			return "both"
+	return "unknown"
 
 
 func _legal_end_turn_action():

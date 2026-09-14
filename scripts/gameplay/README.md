@@ -16,7 +16,9 @@ if result.success:
     state = result.state
 ```
 
-To experiment with another ruleset, construct `AnchorRuleSet` with an Anchor `EntityConfig`, a `BoardPieceType -> EntityConfig` dictionary, board size, category limit, and Anchor deployment limit. `EntityConfig` exposes attack, movement, HP, defense, binding, and conditional HP-reduction values through read-only accessors; exposed dictionaries and reduction lists are defensive copies.
+To experiment with another ruleset, construct `AnchorRuleSet` with an Anchor `EntityConfig`, a `BoardPieceType -> EntityConfig` dictionary, board size, category limit, and Anchor deployment limit. `EntityConfig` exposes attack, movement, attack-blocking side, targetability, HP, defense, binding, and conditional HP-reduction values through read-only accessors; exposed dictionaries and reduction lists are defensive copies.
+
+`AttackBlockingType` is evaluated relative to an entity's owner: `SELF`, `ENEMY`, `BOTH`, or `NONE`. A blocking enemy becomes the ray target only when its immutable `targetable` configuration is true. In the core ruleset, friendly Anchors are transparent, while a protected O or D BoardPiece that reaches 0 HP becomes a non-deployable, non-targetable `PieceSpirit` that blocks both players and records its original type.
 
 `apply_action` never mutates its input. Successful results contain a stabilized state, structured resolution events, a replayable action-log entry, and a deterministic state hash. Rejected results return the original state and a human-readable error. `get_legal_actions`, the topology query methods, scoring, debug snapshots, and `replay` use the same rules path.
 

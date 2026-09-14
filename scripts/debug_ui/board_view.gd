@@ -387,30 +387,50 @@ func _render_board_piece(board_piece, statuses: Dictionary = {}) -> void:
 	root.name = "BoardPiece_%d" % board_piece.id
 	root.position = cell_to_world(board_piece.cell)
 	var mesh_instance := MeshInstance3D.new()
-	if board_piece.board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL:
-		var box := BoxMesh.new()
-		box.size = Vector3(0.66, 0.66, 0.66)
-		mesh_instance.mesh = box
-	else:
-		var pyramid := CylinderMesh.new()
-		pyramid.top_radius = 0.0
-		pyramid.bottom_radius = 0.48
-		pyramid.height = 0.78
-		pyramid.radial_segments = 3
-		mesh_instance.mesh = pyramid
+	match board_piece.board_piece_type:
+		RuleTypes.BoardPieceType.ORTHOGONAL:
+			var box := BoxMesh.new()
+			box.size = Vector3(0.66, 0.66, 0.66)
+			mesh_instance.mesh = box
+		RuleTypes.BoardPieceType.DIAGONAL:
+			var pyramid := CylinderMesh.new()
+			pyramid.top_radius = 0.0
+			pyramid.bottom_radius = 0.48
+			pyramid.height = 0.78
+			pyramid.radial_segments = 3
+			mesh_instance.mesh = pyramid
+		RuleTypes.BoardPieceType.PIECE_SPIRIT:
+			var spirit := SphereMesh.new()
+			spirit.radius = 0.43
+			spirit.height = 0.68
+			spirit.radial_segments = 12
+			spirit.rings = 6
+			mesh_instance.mesh = spirit
 	mesh_instance.position.y = 0.38
 	mesh_instance.material_override = _owner_material(board_piece.player, board_piece.hp <= 0)
 	if board_piece.hp <= 0:
 		mesh_instance.scale = Vector3(0.64, 0.64, 0.64)
 		mesh_instance.position.y = 0.27
 	root.add_child(mesh_instance)
-	var type_label := "O" if board_piece.board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL else "D"
+	var type_label := _board_piece_type_label(board_piece)
 	var maturity := "" if board_piece.is_mature else "  NEW"
 	var label := _make_world_label("%s%d  HP %d%s" % [type_label, board_piece.id, board_piece.hp, maturity], _label_color(board_piece.player), 34)
 	label.position = Vector3(0.0, 0.9, 0.0)
 	root.add_child(label)
 	_add_status_icons(root, statuses)
 	_entity_root.add_child(root)
+
+
+func _board_piece_type_label(board_piece) -> String:
+	match board_piece.board_piece_type:
+		RuleTypes.BoardPieceType.ORTHOGONAL:
+			return "O"
+		RuleTypes.BoardPieceType.DIAGONAL:
+			return "D"
+		RuleTypes.BoardPieceType.PIECE_SPIRIT:
+			var original := "O" if board_piece.original_board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL else "D"
+			return "Spirit(%s)" % original
+	return "?"
 
 
 func _add_status_icons(entity_root: Node3D, statuses: Dictionary) -> void:

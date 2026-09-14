@@ -393,7 +393,7 @@ Horse-leg blocking:
 Any of the following should block the horse leg:
 
 - friendly positive-HP BoardPiece;
-- friendly 0-HP BoardPiece;
+- friendly PieceSpirit;
 - enemy BoardPiece;
 - friendly Anchor;
 - enemy Anchor;
@@ -556,7 +556,7 @@ Exchange their positions.
 Recommended restrictions:
 
 - no Anchors;
-- no 0-HP BoardPieces.
+- no PieceSpirits.
 
 Strategic use:
 
@@ -621,7 +621,7 @@ The first enemy positive-HP BoardPiece hit:
 Restrictions:
 
 - cannot push Anchors;
-- cannot push 0-HP BoardPieces;
+- cannot push PieceSpirits;
 - if the destination is illegal or occupied, the displacement fails;
 - the card is still consumed.
 
@@ -720,15 +720,15 @@ This does **not** disable:
 
 ---
 
-## 11.4 Friendly-0HP Wall-Piercing Shot
+## 11.4 Friendly-PieceSpirit Wall-Piercing Shot
 
 Make one attack.
 
 For this attack only:
 
-> the first friendly 0-HP BoardPiece may be treated as transparent.
+> the first friendly PieceSpirit may be treated as transparent.
 
-Friendly Anchors still block.
+Friendly Anchors remain transparent under the core rule.
 
 Enemy board entities still block normally.
 
@@ -1515,10 +1515,10 @@ At minimum, build fixed-position tests for:
 
 ### Rays
 
-- friendly positive-HP BoardPiece transparent;
-- friendly 0-HP BoardPiece blocks;
-- friendly Anchor blocks;
-- first enemy entity is target;
+- friendly O / D BoardPiece transparent;
+- PieceSpirit blocks both players and is not targetable;
+- friendly Anchor transparent;
+- first targetable enemy O / D BoardPiece or Anchor is the target;
 - kill does not continue through target;
 - range exactly 6;
 - range 7 illegal on larger board.
@@ -1733,9 +1733,9 @@ Future development should preserve these principles unless deliberately changed:
 6. Supply loss kills immediately.
 7. Secondary Anchors do not replace Main Anchor Supply.
 8. Same AnchorCluster cannot count as both Main and Secondary protection.
-9. Protected 0-HP BoardPieces remain positional objects.
+9. Protected 0-HP BoardPieces become non-targetable PieceSpirits that remain positional objects and block both players' rays.
 10. Friendly positive-HP BoardPieces are transparent to friendly normal rays.
-11. Friendly 0-HP BoardPieces and friendly Anchors block friendly normal rays.
+11. Friendly Anchors are transparent to friendly normal rays.
 12. Base O / D range is 6 on every map size.
 13. Special Anchor-affecting abilities should normally require blockable geometry.
 14. Input randomness is preferred over output randomness.

@@ -11,6 +11,8 @@ class EntityConfig extends RefCounted:
 	var _attack_range: int
 	var _attack_type: RuleTypes.AttackType
 	var _attack_damage: int
+	var _attack_blocking_type: RuleTypes.AttackBlockingType
+	var _targetable: bool
 	var _movement_range: int
 	var _movement_type: RuleTypes.MovementType
 	var _max_hp: int
@@ -27,6 +29,12 @@ class EntityConfig extends RefCounted:
 	var attack_damage: int:
 		get:
 			return _attack_damage
+	var attack_blocking_type: RuleTypes.AttackBlockingType:
+		get:
+			return _attack_blocking_type
+	var targetable: bool:
+		get:
+			return _targetable
 	var movement_range: int:
 		get:
 			return _movement_range
@@ -51,13 +59,15 @@ class EntityConfig extends RefCounted:
 		_attack_range = int(values.get("attack_range", 0))
 		_attack_type = values.get("attack_type", RuleTypes.AttackType.NONE)
 		_attack_damage = int(values.get("attack_damage", 0))
+		_attack_blocking_type = values.get("attack_blocking_type", RuleTypes.AttackBlockingType.BOTH)
+		_targetable = bool(values.get("targetable", true))
 		_movement_range = int(values.get("movement_range", 1))
 		_movement_type = values.get("movement_type", RuleTypes.MovementType.ORTHOGONAL)
 		_max_hp = int(values.get("max_hp", 1))
 		_defense = int(values.get("defense", 0))
 		_binding_limit = int(values.get("binding_limit", 0))
 		assert(_attack_range >= 0 and _attack_damage >= 0)
-		assert(_movement_range >= 0 and _max_hp > 0)
+		assert(_movement_range >= 0 and _max_hp >= 0)
 		assert(_defense >= 0 and _binding_limit >= 0)
 		for reduction: Dictionary in values.get("hp_reductions", []):
 			assert(reduction.has("type") and reduction.has("amount"))
@@ -87,6 +97,8 @@ class EntityConfig extends RefCounted:
 			_attack_type,
 			_attack_range,
 			_attack_damage,
+			_attack_blocking_type,
+			_targetable,
 			_movement_type,
 			_movement_range,
 			_max_hp,

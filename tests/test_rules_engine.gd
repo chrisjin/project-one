@@ -24,8 +24,9 @@ func run_all() -> bool:
 	test_supply_paths_and_cuts()
 	test_damage_reduction_uses_only_main_anchor_unit_chain()
 	test_secondary_anchor_protection()
+	test_piece_spirit_conversion_and_targeting()
 	test_no_liberty_resolution_order()
-	test_ray_blocking_and_first_enemy_target()
+	test_configured_ray_blocking_and_first_targetable_enemy()
 	test_attack_and_main_anchor_death_cascade()
 	test_pass_scoring_replay_and_deterministic_hash()
 	test_range_diagonal_scoring_and_repetition()
@@ -221,6 +222,8 @@ func test_secondary_anchor_protection() -> void:
 	_add_anchor(protected_state, 2, RuleTypes.Player.BLACK, Vector2i(2, 0), true)
 	var stable = engine.stabilize(protected_state)
 	_assert_true(stable.board_pieces.has(1), "a mature supplied 0-HP BoardPiece survives with an active distinct Secondary cluster")
+	_assert_equal(stable.board_pieces[1].board_piece_type, RuleTypes.BoardPieceType.PIECE_SPIRIT, "a protected 0-HP BoardPiece stabilizes as a PieceSpirit")
+	_assert_equal(stable.board_pieces[1].original_board_piece_type, RuleTypes.BoardPieceType.ORTHOGONAL, "PieceSpirit records its original BoardPiece type")
 	_assert_equal(engine.secondary_anchor_cluster_ids(stable, 1), [2], "Secondary protection exposes a stable cluster ID")
 	_assert_true(engine.compute_unit_chain_connection(stable, 1), "the BoardPiece remains connected to its physical Main Anchor")
 	_assert_true(engine.board_piece_debug(stable, 1).zero_hp_protection_valid, "debug data exposes legal 0-HP protection")
@@ -245,6 +248,53 @@ func test_secondary_anchor_protection() -> void:
 	_add_piece(disconnected, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(1, 0), 1, 0, true)
 	_add_anchor(disconnected, 2, RuleTypes.Player.BLACK, Vector2i(3, 0), true)
 	_assert_false(engine.stabilize(disconnected).board_pieces.has(1), "losing the friendly-unit connection to Secondary protection kills a 0-HP BoardPiece")
+
+
+func test_piece_spirit_conversion_and_targeting() -> void:
+	var state = _fixture_state(5, 3)
+	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
+	_add_piece(state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 0), 1, 2, true)
+	_add_anchor(state, 2, RuleTypes.Player.WHITE, Vector2i(2, 1))
+	_add_anchor(state, 3, RuleTypes.Player.WHITE, Vector2i(3, 0))
+	_add_piece(state, 2, RuleTypes.Player.WHITE, RuleTypes.BoardPieceType.DIAGONAL, Vector2i(2, 0), 2, 1, true)
+	_add_piece(state, 3, RuleTypes.Player.WHITE, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(4, 0), 3, 2, true)
+	var attack_result = engine.apply_action(state, GameplayAction.attack(1, Vector2i.RIGHT))
+	_assert_true(attack_result.success, "an attack can reduce a protected BoardPiece to 0 HP")
+	_assert_true(attack_result.state.board_pieces.has(2), "dual protection keeps the defeated BoardPiece on the board")
+	var spirit: BoardPiece = attack_result.state.board_pieces[2]
+	_assert_equal(spirit.board_piece_type, RuleTypes.BoardPieceType.PIECE_SPIRIT, "the defeated protected BoardPiece becomes a PieceSpirit")
+	_assert_equal(spirit.original_board_piece_type, RuleTypes.BoardPieceType.DIAGONAL, "PieceSpirit remembers whether it came from O or D")
+	_assert_equal(spirit.main_anchor_id, 2, "PieceSpirit retains its physical Main Anchor binding")
+	var different_origin = attack_result.state.duplicate_state()
+	different_origin.board_pieces[2].original_board_piece_type = RuleTypes.BoardPieceType.ORTHOGONAL
+	_assert_true(engine.state_hash(different_origin) != engine.state_hash(attack_result.state), "PieceSpirit origin participates in deterministic state identity")
+	_assert_true(_has_event(attack_result.events, "board_piece_became_spirit", {
+		"board_piece_id": 2,
+		"original_board_piece_type": RuleTypes.BoardPieceType.DIAGONAL,
+	}), "PieceSpirit conversion emits a structured resolution event")
+	_assert_true(engine.trace_ray(attack_result.state, 1, Vector2i.RIGHT).target.is_empty(), "an enemy PieceSpirit blocks the ray without becoming a target")
+	_assert_true(engine.trace_ray(attack_result.state, 3, Vector2i.LEFT).target.is_empty(), "a friendly PieceSpirit blocks its owner's ray")
+	var fresh_attack_state = attack_result.state.duplicate_state()
+	fresh_attack_state.categories_used.clear()
+	fresh_attack_state.seen_state_hashes.clear()
+	fresh_attack_state.seen_state_hashes[engine.state_hash(fresh_attack_state)] = true
+	_assert_false(
+		engine.apply_action(fresh_attack_state, GameplayAction.attack(1, Vector2i.RIGHT)).success,
+		"a PieceSpirit-blocked ray cannot be submitted as an attack"
+	)
+	_assert_false(
+		engine.apply_action(
+			attack_result.state,
+			GameplayAction.place_board_piece(RuleTypes.BoardPieceType.PIECE_SPIRIT, Vector2i(4, 2), 1)
+		).success,
+		"PieceSpirit cannot be deployed directly"
+	)
+	var offers_piece_spirit := false
+	for action: GameplayAction in engine.get_legal_actions(attack_result.state):
+		if action.kind == GameplayAction.Kind.PLACE_BOARD_PIECE \
+				and action.board_piece_type == RuleTypes.BoardPieceType.PIECE_SPIRIT:
+			offers_piece_spirit = true
+	_assert_false(offers_piece_spirit, "legal placement generation never offers PieceSpirit")
 
 
 func test_no_liberty_resolution_order() -> void:
@@ -276,7 +326,7 @@ func test_no_liberty_resolution_order() -> void:
 	_assert_true(supply_resolved.anchors.has(1), "Supply death opens a liberty that saves the internal Secondary Anchor")
 
 
-func test_ray_blocking_and_first_enemy_target() -> void:
+func test_configured_ray_blocking_and_first_targetable_enemy() -> void:
 	var state = _fixture_state(5, 2)
 	_add_anchor(state, 1, RuleTypes.Player.BLACK, Vector2i(0, 1))
 	_add_piece(state, 1, RuleTypes.Player.BLACK, RuleTypes.BoardPieceType.ORTHOGONAL, Vector2i(0, 0), 1, 2, true)
@@ -284,11 +334,15 @@ func test_ray_blocking_and_first_enemy_target() -> void:
 	_add_anchor(state, 2, RuleTypes.Player.WHITE, Vector2i(3, 0))
 	var ray = engine.trace_ray(state, 1, Vector2i.RIGHT)
 	_assert_equal(ray.target, {"kind": RuleTypes.EntityKind.ANCHOR, "id": 2}, "friendly positive-HP BoardPiece is transparent and first enemy is targeted")
+	state.board_pieces[2].board_piece_type = RuleTypes.BoardPieceType.PIECE_SPIRIT
+	state.board_pieces[2].original_board_piece_type = RuleTypes.BoardPieceType.DIAGONAL
 	state.board_pieces[2].hp = 0
-	_assert_true(engine.trace_ray(state, 1, Vector2i.RIGHT).target.is_empty(), "friendly 0-HP BoardPiece blocks a normal ray")
+	_assert_true(engine.trace_ray(state, 1, Vector2i.RIGHT).target.is_empty(), "friendly PieceSpirit blocks a normal ray")
+	state.board_pieces[2].player = RuleTypes.Player.WHITE
+	_assert_true(engine.trace_ray(state, 1, Vector2i.RIGHT).target.is_empty(), "enemy PieceSpirit blocks without becoming a target")
 	state.board_pieces.erase(2)
 	_add_anchor(state, 3, RuleTypes.Player.BLACK, Vector2i(1, 0))
-	_assert_true(engine.trace_ray(state, 1, Vector2i.RIGHT).target.is_empty(), "friendly Anchor blocks a normal ray")
+	_assert_equal(engine.trace_ray(state, 1, Vector2i.RIGHT).target.id, 2, "friendly Anchor is transparent to a normal ray")
 	state.anchors.erase(3)
 	state.map_definition.set_impassable(Vector2i(1, 0), true, false)
 	_assert_equal(engine.trace_ray(state, 1, Vector2i.RIGHT).target.id, 2, "ray-transparent impassable terrain does not block attacks")

@@ -7,6 +7,8 @@ func _init() -> void:
 		"attack_type": RuleTypes.AttackType.NONE,
 		"attack_range": 0,
 		"attack_damage": 0,
+		"attack_blocking_type": RuleTypes.AttackBlockingType.ENEMY,
+		"targetable": true,
 		"movement_type": RuleTypes.MovementType.ORTHOGONAL,
 		"movement_range": 1,
 		"max_hp": 3,
@@ -17,6 +19,8 @@ func _init() -> void:
 	var base_board_piece_values := {
 		"attack_range": 6,
 		"attack_damage": 2,
+		"attack_blocking_type": RuleTypes.AttackBlockingType.ENEMY,
+		"targetable": true,
 		"movement_type": RuleTypes.MovementType.ORTHOGONAL,
 		"movement_range": 0,
 		"max_hp": 2,
@@ -31,6 +35,19 @@ func _init() -> void:
 	o_values.attack_type = RuleTypes.AttackType.ORTHOGONAL
 	var d_values := base_board_piece_values.duplicate(true)
 	d_values.attack_type = RuleTypes.AttackType.DIAGONAL
+	var piece_spirit_config := EntityConfig.new({
+		"attack_type": RuleTypes.AttackType.NONE,
+		"attack_range": 0,
+		"attack_damage": 0,
+		"attack_blocking_type": RuleTypes.AttackBlockingType.BOTH,
+		"targetable": false,
+		"movement_type": RuleTypes.MovementType.NONE,
+		"movement_range": 0,
+		"max_hp": 0,
+		"defense": 0,
+		"binding_limit": 0,
+		"hp_reductions": [],
+	})
 	super({
 		"standard_board_size": Vector2i(7, 7),
 		"max_categories_per_turn": 2,
@@ -39,5 +56,6 @@ func _init() -> void:
 		"board_piece_configs": {
 			RuleTypes.BoardPieceType.ORTHOGONAL: EntityConfig.new(o_values),
 			RuleTypes.BoardPieceType.DIAGONAL: EntityConfig.new(d_values),
+			RuleTypes.BoardPieceType.PIECE_SPIRIT: piece_spirit_config,
 		},
 	})

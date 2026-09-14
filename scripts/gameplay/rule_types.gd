@@ -10,6 +10,7 @@ enum Player {
 enum BoardPieceType {
 	ORTHOGONAL,
 	DIAGONAL,
+	PIECE_SPIRIT,
 }
 
 enum AttackType {
@@ -22,6 +23,13 @@ enum MovementType {
 	NONE,
 	ORTHOGONAL,
 	DIAGONAL,
+}
+
+enum AttackBlockingType {
+	NONE,
+	SELF,
+	ENEMY,
+	BOTH,
 }
 
 enum HpReductionType {

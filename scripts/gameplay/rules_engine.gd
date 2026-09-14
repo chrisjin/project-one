@@ -130,14 +130,14 @@ func trace_ray(state: GameState, board_piece_id: int, direction: Vector2i) -> Di
 		var entity := state.entity_at(cell)
 		if entity.is_empty():
 			continue
-		if state.entity_player(entity) != board_piece.player:
+		var entity_config = _entity_config(state, entity)
+		if entity_config == null:
+			break
+		if not _blocks_attack_from(entity_config.attack_blocking_type, state.entity_player(entity), board_piece.player):
+			continue
+		if state.entity_player(entity) != board_piece.player and entity_config.targetable:
 			result.target = entity
-			break
-		if entity.kind == RuleTypes.EntityKind.ANCHOR:
-			break
-		var friendly_piece: BoardPiece = state.board_pieces[entity.id]
-		if friendly_piece.hp <= 0:
-			break
+		break
 	return result
 
 
@@ -331,11 +331,15 @@ func board_piece_debug(state: GameState, board_piece_id: int) -> Dictionary:
 		return {}
 	var board_piece: BoardPiece = state.board_pieces[board_piece_id]
 	var group_data := _group_debug_data(state, RuleTypes.EntityKind.BOARD_PIECE, board_piece_id)
+	var config = rule_set.board_piece_config(board_piece.board_piece_type)
 	return {
 		"board_piece_id": board_piece.id,
 		"board_piece_type": board_piece.board_piece_type,
+		"original_board_piece_type": board_piece.original_board_piece_type,
 		"owner": board_piece.player,
 		"hp": board_piece.hp,
+		"targetable": config.targetable,
+		"attack_blocking_type": config.attack_blocking_type,
 		"is_mature": board_piece.is_mature,
 		"main_anchor_id": board_piece.main_anchor_id,
 		"main_anchor_alive": state.anchors.has(board_piece.main_anchor_id),
@@ -369,6 +373,8 @@ func anchor_debug(state: GameState, anchor_id: int) -> Dictionary:
 		"anchor_id": anchor.id,
 		"owner": anchor.player,
 		"hp": anchor.hp,
+		"targetable": rule_set.anchor_config().targetable,
+		"attack_blocking_type": rule_set.anchor_config().attack_blocking_type,
 		"is_active": anchor.is_active,
 		"anchor_cluster_id": clusters[cluster_index][0] if cluster_index >= 0 else -1,
 		"bound_board_piece_ids": bound_board_piece_ids,
@@ -461,6 +467,8 @@ func _place_anchor(state: GameState, action: GameplayAction, events: Array[Dicti
 
 
 func _place_board_piece(state: GameState, action: GameplayAction, events: Array[Dictionary]) -> String:
+	if action.board_piece_type == RuleTypes.BoardPieceType.PIECE_SPIRIT:
+		return "PieceSpirit cannot be deployed directly."
 	if not rule_set.has_board_piece_config(action.board_piece_type):
 		return "That BoardPiece type is not available in this rule set."
 	if not state.map_definition.is_passable(action.cell):
@@ -667,6 +675,8 @@ func _stabilize_in_place(state: GameState, events: Array[Dictionary]) -> void:
 		if _remove_supply_disconnected_board_pieces(state, events):
 			changed = true
 		# Protection is topology-dependent and is resolved after all current Supply deaths.
+		if _convert_protected_zero_hp_board_pieces_to_spirits(state, events):
+			changed = true
 		if _remove_unprotected_zero_hp_board_pieces(state, events):
 			changed = true
 		if changed:
@@ -705,6 +715,31 @@ func _remove_supply_disconnected_board_pieces(state: GameState, events: Array[Di
 		state.board_pieces.erase(board_piece_id)
 		events.append({"type": "board_piece_removed", "board_piece_id": board_piece_id, "cause": "supply"})
 	return not removed_ids.is_empty()
+
+
+func _convert_protected_zero_hp_board_pieces_to_spirits(
+	state: GameState,
+	events: Array[Dictionary]
+) -> bool:
+	# Conversion changes representation while preserving the BoardPiece's stable identity and binding.
+	if not rule_set.has_board_piece_config(RuleTypes.BoardPieceType.PIECE_SPIRIT):
+		return false
+	var converted := false
+	for board_piece_id: int in _sorted_int_keys(state.board_pieces):
+		var board_piece: BoardPiece = state.board_pieces[board_piece_id]
+		if board_piece.board_piece_type == RuleTypes.BoardPieceType.PIECE_SPIRIT \
+				or board_piece.hp > 0 \
+				or not has_dual_anchor_protection(state, board_piece_id):
+			continue
+		board_piece.original_board_piece_type = board_piece.board_piece_type
+		board_piece.board_piece_type = RuleTypes.BoardPieceType.PIECE_SPIRIT
+		events.append({
+			"type": "board_piece_became_spirit",
+			"board_piece_id": board_piece_id,
+			"original_board_piece_type": board_piece.original_board_piece_type,
+		})
+		converted = true
+	return converted
 
 
 func _remove_unprotected_zero_hp_board_pieces(state: GameState, events: Array[Dictionary]) -> bool:
@@ -833,6 +868,8 @@ func _append_placement_actions(state: GameState, actions: Array[GameplayAction])
 				actions.append(GameplayAction.place_anchor(cell))
 			for anchor_id: int in friendly_anchors:
 				for board_piece_type: int in rule_set.board_piece_types():
+					if board_piece_type == RuleTypes.BoardPieceType.PIECE_SPIRIT:
+						continue
 					actions.append(GameplayAction.place_board_piece(board_piece_type, cell, anchor_id))
 
 
@@ -879,6 +916,31 @@ func _movement_destinations(origin: Vector2i, config) -> Array[Vector2i]:
 		for distance in range(1, config.movement_range + 1):
 			destinations.append(origin + direction * distance)
 	return destinations
+
+
+func _entity_config(state: GameState, entity: Dictionary):
+	if entity.kind == RuleTypes.EntityKind.ANCHOR:
+		return rule_set.anchor_config()
+	if entity.kind == RuleTypes.EntityKind.BOARD_PIECE and state.board_pieces.has(entity.id):
+		var board_piece: BoardPiece = state.board_pieces[entity.id]
+		if rule_set.has_board_piece_config(board_piece.board_piece_type):
+			return rule_set.board_piece_config(board_piece.board_piece_type)
+	return null
+
+
+func _blocks_attack_from(
+	blocking_type: RuleTypes.AttackBlockingType,
+	entity_player: RuleTypes.Player,
+	attacking_player: RuleTypes.Player
+) -> bool:
+	match blocking_type:
+		RuleTypes.AttackBlockingType.SELF:
+			return entity_player == attacking_player
+		RuleTypes.AttackBlockingType.ENEMY:
+			return entity_player != attacking_player
+		RuleTypes.AttackBlockingType.BOTH:
+			return true
+	return false
 
 
 func _bound_board_piece_count(state: GameState, anchor_id: int) -> int:
