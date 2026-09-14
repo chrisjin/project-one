@@ -1121,7 +1121,9 @@ An Anchor:
 moves 1 orthogonal cell
 ```
 
-and must remain on an Anchor-valid cell for that map.
+Its destination may be any empty, passable cell, including a cell at the edge of the board.
+
+Anchor-valid cells restrict deployment only; they do not restrict movement.
 
 After moving an Anchor, immediately recalculate:
 

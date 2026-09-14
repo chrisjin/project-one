@@ -65,6 +65,18 @@ func test_standard_map_and_action_categories() -> void:
 	_assert_true(replayed.success, "an automatically ended turn remains replayable without a synthetic UI action")
 	_assert_equal(engine.state_hash(replayed.state), engine.state_hash(activated.state), "automatic turn replay reproduces the exact state")
 
+	var edge_move_state = engine.apply_action(engine.new_game(), GameplayAction.place_anchor(Vector2i(1, 1))).state
+	var edge_move = engine.apply_action(
+		edge_move_state,
+		GameplayAction.move(RuleTypes.EntityKind.ANCHOR, 1, Vector2i(0, 1))
+	)
+	_assert_true(edge_move.success, "an Anchor may move from an Anchor-valid cell to the board edge")
+	_assert_equal(edge_move.state.anchors[1].cell, Vector2i(0, 1), "Anchor movement reaches a non-Anchor-valid edge cell")
+	_assert_false(
+		engine.apply_action(engine.new_game(), GameplayAction.place_anchor(Vector2i(0, 1))).success,
+		"the same edge cell remains illegal for Anchor placement"
+	)
+
 
 func test_start_of_turn_maturation_and_activation() -> void:
 	var state = _fixture_state(4, 2)

@@ -101,6 +101,7 @@ func _run() -> void:
 	_assert_true(game.cell_actions.is_empty(), "a non-movable BoardPiece exposes no movement destinations")
 	game._on_mode_requested(2)
 	game._handle_cell_click(Vector2i(1, 1))
+	_assert_true(game.cell_actions.has(Vector2i(0, 1)), "Anchor movement highlights a passable board-edge destination")
 	game._handle_cell_click(Vector2i(1, 2))
 	_assert_equal(game.game_state.anchors[1].cell, Vector2i(1, 2), "Anchor movement submits the exact highlighted engine action")
 	_assert_equal(game.game_state.current_player, RuleTypes.Player.WHITE, "placement plus Anchor movement automatically advances to the other local player")

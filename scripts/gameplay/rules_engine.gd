@@ -513,8 +513,6 @@ func _move_entity(state: GameState, action: GameplayAction, events: Array[Dictio
 			return "Only a friendly Anchor may move."
 		if not _movement_destinations(anchor.cell, rule_set.anchor_config()).has(action.cell):
 			return "The Anchor's rule configuration does not permit that movement."
-		if not state.map_definition.is_anchor_valid(action.cell):
-			return "An Anchor must remain on an Anchor-valid cell."
 		var origin := anchor.cell
 		anchor.cell = action.cell
 		events.append({"type": "anchor_moved", "anchor_id": anchor.id, "from": origin, "to": action.cell})
@@ -879,7 +877,7 @@ func _append_movement_actions(state: GameState, actions: Array[GameplayAction]) 
 		if anchor.player != state.current_player:
 			continue
 		for destination: Vector2i in _movement_destinations(anchor.cell, rule_set.anchor_config()):
-			if state.map_definition.is_anchor_valid(destination) and state.is_cell_empty(destination):
+			if state.map_definition.is_passable(destination) and state.is_cell_empty(destination):
 				actions.append(GameplayAction.move(RuleTypes.EntityKind.ANCHOR, anchor_id, destination))
 	for board_piece_id: int in _sorted_int_keys(state.board_pieces):
 		var board_piece: BoardPiece = state.board_pieces[board_piece_id]
