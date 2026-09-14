@@ -347,8 +347,13 @@ func _run() -> void:
 
 	game._on_end_turn_requested()
 	game._on_pass_requested()
-	game._handle_cell_click(Vector2i(1, 1), Vector2(420, 300))
+	var context_viewport_size: Vector2 = root.get_visible_rect().size
+	var bottom_click := Vector2(420, context_viewport_size.y - 4.0)
+	game._handle_cell_click(Vector2i(1, 1), bottom_click)
 	_assert_true(_context_button(hud, "Move") != null, "selecting a friendly Anchor shows Move")
+	var context_rect: Rect2 = hud._context_panel.get_rect()
+	_assert_true(context_rect.position.y < bottom_click.y, "bottom-edge entity context menu opens above the click")
+	_assert_true(context_rect.position.y >= 8.0 and context_rect.end.y <= context_viewport_size.y - 8.0, "context menu remains fully inside the viewport")
 	_assert_false(_context_button(hud, "Placement").disabled, "Anchor Placement is enabled from engine-approved bound placement actions")
 	game._on_context_option_requested(DebugController.ContextOption.ANCHOR_PLACEMENT)
 	_assert_true(_context_button(hud, "O BoardPiece") != null and _context_button(hud, "D BoardPiece") != null, "Anchor Placement opens the BoardPiece-type submenu")

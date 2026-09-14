@@ -139,12 +139,19 @@ func show_context_menu(title: String, items: Array[Dictionary], screen_position:
 		button.disabled = not bool(item.get("enabled", true))
 		button.custom_minimum_size = Vector2(210, 34)
 		_context_content.add_child(button)
-	var menu_height := 42.0 + float(items.size()) * 40.0
-	_context_panel.size = Vector2(230, menu_height)
+	var minimum_size := _context_panel.get_combined_minimum_size()
+	var estimated_height := 42.0 + float(items.size()) * 40.0
+	var menu_size := Vector2(maxf(230.0, minimum_size.x), maxf(estimated_height, minimum_size.y))
+	_context_panel.size = menu_size
 	var viewport_size := get_viewport().get_visible_rect().size
+	var menu_position := screen_position + Vector2(12.0, 12.0)
+	if menu_position.x + menu_size.x > viewport_size.x - 8.0:
+		menu_position.x = screen_position.x - menu_size.x - 12.0
+	if menu_position.y + menu_size.y > viewport_size.y - 8.0:
+		menu_position.y = screen_position.y - menu_size.y - 12.0
 	_context_panel.position = Vector2(
-		clampf(screen_position.x + 12.0, 8.0, viewport_size.x - 238.0),
-		clampf(screen_position.y + 12.0, 8.0, viewport_size.y - menu_height - 8.0)
+		clampf(menu_position.x, 8.0, maxf(8.0, viewport_size.x - menu_size.x - 8.0)),
+		clampf(menu_position.y, 8.0, maxf(8.0, viewport_size.y - menu_size.y - 8.0))
 	)
 	_context_panel.visible = true
 
