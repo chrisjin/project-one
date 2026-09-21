@@ -12,6 +12,7 @@ signal pass_requested
 signal restart_requested
 signal context_option_requested(option_id: int)
 signal match_mode_requested(match_mode: int)
+signal random_board_piece_placement_toggled(enabled: bool)
 
 enum Mode {
 	NONE,
@@ -51,6 +52,7 @@ var _game_over_label: Label
 var _context_panel: PanelContainer
 var _context_content: VBoxContainer
 var _match_setup_overlay: Control
+var _random_placement_toggle: CheckButton
 
 
 func _ready() -> void:
@@ -323,6 +325,15 @@ func _build_match_setup(canvas: Control) -> void:
 	explanation.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(explanation)
+
+	_random_placement_toggle = CheckButton.new()
+	_random_placement_toggle.text = "Random BoardPiece destinations"
+	_random_placement_toggle.tooltip_text = "Choose the BoardPiece type and Main Anchor; the destination is selected randomly."
+	_random_placement_toggle.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_random_placement_toggle.toggled.connect(
+		func(enabled: bool) -> void: random_board_piece_placement_toggled.emit(enabled)
+	)
+	content.add_child(_random_placement_toggle)
 
 	var human_match := _make_button("Human vs Human", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_HUMAN))
 	var computer_black_match := _make_button("Human vs AI  •  Play as Black", func() -> void: match_mode_requested.emit(MatchMode.HUMAN_VS_AI))

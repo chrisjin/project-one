@@ -31,6 +31,9 @@ func _run() -> void:
 	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as Black") != null, "match menu offers Human vs AI as Black")
 	_assert_true(_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as White") != null, "match menu offers Human vs AI as White")
 	_assert_true(_find_button(hud._match_setup_overlay, "AI vs AI") != null, "match menu offers AI vs AI")
+	var random_placement_toggle := _find_button(hud._match_setup_overlay, "Random BoardPiece destinations")
+	_assert_true(random_placement_toggle != null, "match menu offers the independent random BoardPiece destination option")
+	_assert_false(random_placement_toggle.button_pressed, "random BoardPiece destinations default to off")
 	_assert_true(hud._placement_button.disabled, "gameplay controls are locked before a match mode is selected")
 	_find_button(hud._match_setup_overlay, "Human vs Human").pressed.emit()
 	_assert_false(hud._match_setup_overlay.visible, "choosing a match mode hides the setup menu")
@@ -420,7 +423,92 @@ func _run() -> void:
 	_assert_equal(board_view.get_node("BindingFlow").get_child_count(), 3, "switching selection refreshes the selected BoardPiece's full Anchor binding group")
 
 	game._show_match_setup()
+	random_placement_toggle.set_pressed_no_signal(true)
+	random_placement_toggle.toggled.emit(true)
+	_find_button(hud._match_setup_overlay, "Human vs Human").pressed.emit()
+	_assert_true(game.random_board_piece_placement_enabled, "random placement toggle reaches the match controller")
+	_assert_true(hud._match_mode_label.text.contains("Random placement"), "active match summary identifies random placement mode")
+	game._on_placement_requested(-1)
+	game._handle_cell_click(Vector2i(1, 1))
+	_assert_equal(game.game_state.anchors[1].cell, Vector2i(1, 1), "random mode leaves Anchor placement manually targeted")
+	game._on_mode_requested(DebugController.Mode.ACTION)
+	game._handle_cell_click(Vector2i(1, 1))
+	game._on_pass_requested()
+	game._handle_cell_click(Vector2i(3, 3), Vector2(500, 320))
+	_assert_true(_context_button(hud, "Anchor") != null, "random mode keeps manual Anchor placement in empty-cell context")
+	_assert_true(
+		_context_button(hud, "O BoardPiece") == null and _context_button(hud, "D BoardPiece") == null,
+		"random mode removes empty-cell BoardPiece shortcuts that would choose a destination"
+	)
+	var random_candidates: Dictionary = {}
+	for action in game.legal_actions:
+		if action.kind == GameplayAction.Kind.PLACE_BOARD_PIECE \
+				and action.main_anchor_id == 1 \
+				and action.board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL:
+			random_candidates[action.cell] = true
+	_assert_true(random_candidates.size() > 1, "random placement test has multiple engine-approved destinations")
+	game._random_placement_rng.seed = 12345
+	game._on_placement_requested(RuleTypes.BoardPieceType.ORTHOGONAL)
+	_assert_true(game.legal_main_anchor_ids.has(1), "random placement still asks the player to choose a physical Main Anchor")
+	game._handle_cell_click(Vector2i(1, 1))
+	_assert_true(game.game_state.board_pieces.has(1), "clicking the chosen Anchor immediately places the BoardPiece in random mode")
+	_assert_true(random_candidates.has(game.game_state.board_pieces[1].cell), "random destination is sampled only from engine-approved actions")
+	_assert_equal(game.game_state.board_pieces[1].main_anchor_id, 1, "random placement preserves the player's chosen Main Anchor")
+	_assert_equal(game.mode, DebugController.Mode.NONE, "random placement resolves without entering destination-selection mode")
+	game._on_mode_requested(DebugController.Mode.MOVEMENT)
+	game._handle_cell_click(Vector2i(1, 1))
+	var manual_anchor_destination: Vector2i = game.cell_actions.keys()[0]
+	game._handle_cell_click(manual_anchor_destination)
+	_assert_equal(game.game_state.anchors[1].cell, manual_anchor_destination, "random mode leaves Anchor movement manually targeted")
+
+	var random_mode_attack_state = game.rules_engine.new_game()
+	var random_mode_black_anchor = Anchor.new(
+		1, RuleTypes.Player.BLACK, Vector2i(1, 2), 0, 1, game.rule_set.anchor_config().max_hp
+	)
+	random_mode_black_anchor.is_active = true
+	var random_mode_white_anchor = Anchor.new(
+		2, RuleTypes.Player.WHITE, Vector2i(5, 4), 0, 1, game.rule_set.anchor_config().max_hp
+	)
+	random_mode_white_anchor.is_active = true
+	var random_mode_attacker = BoardPiece.new(
+		1,
+		RuleTypes.Player.BLACK,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(2, 2),
+		1,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	random_mode_attacker.is_mature = true
+	var random_mode_target = BoardPiece.new(
+		2,
+		RuleTypes.Player.WHITE,
+		RuleTypes.BoardPieceType.ORTHOGONAL,
+		Vector2i(4, 2),
+		2,
+		0,
+		game.rule_set.board_piece_config(RuleTypes.BoardPieceType.ORTHOGONAL).max_hp
+	)
+	random_mode_target.is_mature = true
+	random_mode_attack_state.anchors = {1: random_mode_black_anchor, 2: random_mode_white_anchor}
+	random_mode_attack_state.board_pieces = {1: random_mode_attacker, 2: random_mode_target}
+	random_mode_attack_state.anchors_deployed[RuleTypes.Player.BLACK] = 1
+	random_mode_attack_state.anchors_deployed[RuleTypes.Player.WHITE] = 1
+	random_mode_attack_state.next_anchor_id = 3
+	random_mode_attack_state.next_board_piece_id = 3
+	game.game_state = game.rules_engine.stabilize(random_mode_attack_state)
+	game._refresh_all()
+	game._on_mode_requested(DebugController.Mode.ACTION)
+	game._handle_cell_click(Vector2i(2, 2))
+	_assert_true(game.cell_actions.has(Vector2i(4, 2)), "random mode leaves attack target selection manual")
+	game._handle_cell_click(Vector2i(4, 2))
+	_assert_false(game.game_state.board_pieces.has(2), "random mode submits the manually selected attack target")
+
+	game._show_match_setup()
+	random_placement_toggle.set_pressed_no_signal(false)
+	random_placement_toggle.toggled.emit(false)
 	_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as Black").pressed.emit()
+	_assert_false(game.random_board_piece_placement_enabled, "random placement can be toggled off for a later match")
 	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_AI, "Human vs AI menu selection configures the match")
 	_assert_true(game._can_accept_human_input(), "Human controls Black at the start of Human vs AI")
 	game._on_pass_requested()

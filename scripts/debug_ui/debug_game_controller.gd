@@ -76,7 +76,9 @@ var context_entity: Dictionary = {}
 var context_screen_position := Vector2.ZERO
 var context_action_options: Dictionary = {}
 var match_mode: MatchMode = MatchMode.HUMAN_VS_HUMAN
+var random_board_piece_placement_enabled := false
 var match_started := false
+var _random_placement_rng := RandomNumberGenerator.new()
 var _ai_running := false
 var _ai_generation := 0
 var _ai_search_threads: Array[Thread] = []
@@ -85,6 +87,7 @@ var _last_ai_search_was_background := false
 
 func _ready() -> void:
 	minimax_ai = MinimaxAi.new(rule_set)
+	_random_placement_rng.randomize()
 	var camera_target := Vector3(camera.position.x, 0.0, camera.position.z)
 	camera.look_at(camera_target, Vector3(0.0, 0.0, -1.0))
 	hud.mode_requested.connect(_on_mode_requested)
@@ -94,6 +97,7 @@ func _ready() -> void:
 	hud.restart_requested.connect(_show_match_setup)
 	hud.context_option_requested.connect(_on_context_option_requested)
 	hud.match_mode_requested.connect(_start_match)
+	hud.random_board_piece_placement_toggled.connect(_on_random_board_piece_placement_toggled)
 	restart_match()
 	_show_match_setup()
 
@@ -124,7 +128,13 @@ func restart_match() -> void:
 	_ai_generation += 1
 	_ai_running = false
 	_last_ai_search_was_background = false
-	game_state = rules_engine.new_game()
+	var match_seed := 0
+	if random_board_piece_placement_enabled:
+		match_seed = _random_placement_rng.randi()
+	game_state = rules_engine.new_game(null, match_seed)
+	if random_board_piece_placement_enabled:
+		# Keeping the chosen seed in GameState makes a random-placement match reproducible.
+		_random_placement_rng.seed = match_seed
 	mode = Mode.NONE
 	placement_choice = PLACEMENT_NONE
 	selected_entity.clear()
@@ -153,10 +163,14 @@ func _show_match_setup() -> void:
 	selected_entity.clear()
 	selected_main_anchor_id = 0
 	_clear_context()
-	status_message = "Choose Human vs Human, either Human vs AI side, or AI vs AI."
+	status_message = "Choose a match mode and optional random BoardPiece destinations."
 	hud.set_match_mode_text("Choose match mode")
 	_refresh_all()
 	hud.show_match_setup()
+
+
+func _on_random_board_piece_placement_toggled(enabled: bool) -> void:
+	random_board_piece_placement_enabled = enabled
 
 
 func _on_mode_requested(requested_mode: int) -> void:
@@ -185,7 +199,12 @@ func _on_placement_requested(requested_type: int) -> void:
 	selected_entity.clear()
 	selected_main_anchor_id = 0
 	_clear_context()
-	status_message = "Choose a highlighted placement cell." if requested_type == PLACE_ANCHOR else "Choose a highlighted physical Main Anchor first."
+	if requested_type == PLACE_ANCHOR:
+		status_message = "Choose a highlighted placement cell."
+	elif random_board_piece_placement_enabled:
+		status_message = "Choose a highlighted physical Main Anchor; the destination will be random."
+	else:
+		status_message = "Choose a highlighted physical Main Anchor first."
 	_rebuild_interaction()
 
 
@@ -253,11 +272,22 @@ func _open_context_for_cell(cell: Vector2i, screen_position: Vector2) -> void:
 	context_action_options.clear()
 	_inspect_cell(cell)
 	if context_entity.is_empty():
-		hud.show_context_menu("Place at %s" % _cell_name(cell), [
+		var placement_items: Array[Dictionary] = [
 			_context_item(ContextOption.PLACE_ANCHOR, "Anchor", _has_anchor_placement_at(cell)),
-			_context_item(ContextOption.PLACE_O_BOARD_PIECE, "O BoardPiece", _has_board_piece_placement_at(cell, RuleTypes.BoardPieceType.ORTHOGONAL)),
-			_context_item(ContextOption.PLACE_D_BOARD_PIECE, "D BoardPiece", _has_board_piece_placement_at(cell, RuleTypes.BoardPieceType.DIAGONAL)),
-		], context_screen_position)
+		]
+		# Random mode must not expose an empty-cell shortcut that selects a destination.
+		if not random_board_piece_placement_enabled:
+			placement_items.append(_context_item(
+				ContextOption.PLACE_O_BOARD_PIECE,
+				"O BoardPiece",
+				_has_board_piece_placement_at(cell, RuleTypes.BoardPieceType.ORTHOGONAL)
+			))
+			placement_items.append(_context_item(
+				ContextOption.PLACE_D_BOARD_PIECE,
+				"D BoardPiece",
+				_has_board_piece_placement_at(cell, RuleTypes.BoardPieceType.DIAGONAL)
+			))
+		hud.show_context_menu("Place at %s" % _cell_name(cell), placement_items, context_screen_position)
 		return
 	if game_state.entity_player(context_entity) != game_state.current_player:
 		hud.hide_context_menu()
@@ -321,6 +351,10 @@ func _begin_context_entity_mode(requested_mode: Mode, message: String) -> void:
 
 func _begin_context_placement(board_piece_type: RuleTypes.BoardPieceType) -> void:
 	if not context_entity.is_empty() and context_entity.kind == RuleTypes.EntityKind.ANCHOR:
+		if random_board_piece_placement_enabled:
+			hud.hide_context_menu()
+			_submit_random_board_piece_placement(context_entity.id, board_piece_type)
+			return
 		mode = Mode.PLACEMENT
 		placement_choice = board_piece_type
 		selected_entity = context_entity.duplicate()
@@ -329,6 +363,10 @@ func _begin_context_placement(board_piece_type: RuleTypes.BoardPieceType) -> voi
 		status_message = "Choose a highlighted destination for Anchor #%d." % selected_main_anchor_id
 		_show_selected_debug()
 		_rebuild_interaction()
+		return
+	if random_board_piece_placement_enabled:
+		_set_feedback("Select a physical Main Anchor to place a BoardPiece randomly.")
+		hud.hide_context_menu()
 		return
 	_show_main_anchor_menu(board_piece_type)
 
@@ -365,6 +403,9 @@ func _handle_placement_click(cell: Vector2i) -> void:
 	if selected_main_anchor_id == 0:
 		var entity: Dictionary = game_state.entity_at(cell)
 		if not entity.is_empty() and entity.kind == RuleTypes.EntityKind.ANCHOR and legal_main_anchor_ids.has(entity.id):
+			if random_board_piece_placement_enabled:
+				_submit_random_board_piece_placement(entity.id, placement_choice)
+				return
 			selected_main_anchor_id = entity.id
 			selected_entity = entity
 			status_message = "Main Anchor A%d selected. Choose a highlighted destination." % entity.id
@@ -377,6 +418,23 @@ func _handle_placement_click(cell: Vector2i) -> void:
 		_submit_action(cell_actions[cell])
 	else:
 		_inspect_or_reject(cell, "That destination is not legal for the selected Main Anchor.")
+
+
+func _submit_random_board_piece_placement(
+	anchor_id: int,
+	board_piece_type: RuleTypes.BoardPieceType
+) -> bool:
+	var candidates: Array = []
+	for action in legal_actions:
+		if action.kind == GameplayAction.Kind.PLACE_BOARD_PIECE \
+				and action.main_anchor_id == anchor_id \
+				and action.board_piece_type == board_piece_type:
+			candidates.append(action)
+	if candidates.is_empty():
+		_set_feedback("That Anchor has no engine-approved destination for this BoardPiece.")
+		return false
+	var selected_index := _random_placement_rng.randi_range(0, candidates.size() - 1)
+	return _submit_action(candidates[selected_index])
 
 
 func _handle_movement_click(cell: Vector2i) -> void:
@@ -908,13 +966,18 @@ func _match_mode_name() -> String:
 
 
 func _match_mode_summary() -> String:
+	var summary: String
 	if match_mode == MatchMode.HUMAN_VS_AI:
-		return "Human vs AI  •  Black: Human  •  White: AI"
-	if match_mode == MatchMode.HUMAN_VS_AI_AS_WHITE:
-		return "Human vs AI  •  Black: AI  •  White: Human"
-	if match_mode == MatchMode.AI_VS_AI:
-		return "AI vs AI  •  Black: AI  •  White: AI"
-	return "Human vs Human"
+		summary = "Human vs AI  •  Black: Human  •  White: AI"
+	elif match_mode == MatchMode.HUMAN_VS_AI_AS_WHITE:
+		summary = "Human vs AI  •  Black: AI  •  White: Human"
+	elif match_mode == MatchMode.AI_VS_AI:
+		summary = "AI vs AI  •  Black: AI  •  White: AI"
+	else:
+		summary = "Human vs Human"
+	if random_board_piece_placement_enabled:
+		summary += "  •  Random placement"
+	return summary
 
 
 func _entity_key(entity: Dictionary) -> String:
