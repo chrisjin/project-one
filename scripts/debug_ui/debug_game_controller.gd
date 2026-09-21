@@ -424,6 +424,17 @@ func _submit_random_board_piece_placement(
 	anchor_id: int,
 	board_piece_type: RuleTypes.BoardPieceType
 ) -> bool:
+	var action = _choose_random_board_piece_placement(anchor_id, board_piece_type)
+	if action == null:
+		_set_feedback("That Anchor has no engine-approved destination for this BoardPiece.")
+		return false
+	return _submit_action(action)
+
+
+func _choose_random_board_piece_placement(
+	anchor_id: int,
+	board_piece_type: RuleTypes.BoardPieceType
+):
 	var candidates: Array = []
 	for action in legal_actions:
 		if action.kind == GameplayAction.Kind.PLACE_BOARD_PIECE \
@@ -431,10 +442,21 @@ func _submit_random_board_piece_placement(
 				and action.board_piece_type == board_piece_type:
 			candidates.append(action)
 	if candidates.is_empty():
-		_set_feedback("That Anchor has no engine-approved destination for this BoardPiece.")
-		return false
+		return null
 	var selected_index := _random_placement_rng.randi_range(0, candidates.size() - 1)
-	return _submit_action(candidates[selected_index])
+	return candidates[selected_index]
+
+
+func _randomize_ai_board_piece_destination(action):
+	if not random_board_piece_placement_enabled \
+			or action == null \
+			or action.kind != GameplayAction.Kind.PLACE_BOARD_PIECE:
+		return action
+	var randomized_action = _choose_random_board_piece_placement(
+		action.main_anchor_id,
+		action.board_piece_type
+	)
+	return action if randomized_action == null else randomized_action
 
 
 func _handle_movement_click(cell: Vector2i) -> void:
@@ -895,6 +917,7 @@ func _run_ai_actions(generation: int) -> void:
 			break
 		_last_ai_search_was_background = not bool(search_result.get("ran_on_main_thread", true))
 		var action = search_result.get("action")
+		action = _randomize_ai_board_piece_destination(action)
 		if action == null or not _submit_action(action, true):
 			status_message = "AI could not produce an engine-approved action."
 			break

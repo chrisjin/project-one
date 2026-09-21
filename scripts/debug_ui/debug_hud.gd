@@ -328,7 +328,7 @@ func _build_match_setup(canvas: Control) -> void:
 
 	_random_placement_toggle = CheckButton.new()
 	_random_placement_toggle.text = "Random BoardPiece destinations"
-	_random_placement_toggle.tooltip_text = "Choose the BoardPiece type and Main Anchor; the destination is selected randomly."
+	_random_placement_toggle.tooltip_text = "Human and AI BoardPiece destinations are selected randomly."
 	_random_placement_toggle.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_random_placement_toggle.toggled.connect(
 		func(enabled: bool) -> void: random_board_piece_placement_toggled.emit(enabled)

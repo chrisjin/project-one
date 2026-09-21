@@ -1,6 +1,6 @@
 # Playable 3D debug client
 
-Run the project from Godot or execute the project binary with `--path .`. The default scene first offers **Human vs Human**, **Human vs AI as Black**, **Human vs AI as White**, and **AI vs AI** on the standard board. **Random BoardPiece destinations** is an independent match option: when enabled, a human still chooses O or D and its physical Main Anchor, then the client immediately submits one randomly selected engine-approved destination. Anchor placement, Anchor movement, and attacks remain manually targeted.
+Run the project from Godot or execute the project binary with `--path .`. The default scene first offers **Human vs Human**, **Human vs AI as Black**, **Human vs AI as White**, and **AI vs AI** on the standard board. **Random BoardPiece destinations** is an independent match option: when enabled, every human or AI BoardPiece placement uses a randomly selected engine-approved destination. Humans still choose O or D and its physical Main Anchor; the AI's chosen type and Main Anchor are also preserved. Anchor placement, Anchor movement, and attacks remain manually targeted.
 
 - Choose **Placement**, **Movement**, or **Action**, then click only engine-highlighted sources and destinations. In the core game, Movement highlights Anchors only; base O and D BoardPieces cannot move.
 - For O/D placement, click a highlighted physical Main Anchor before choosing the destination; with random destinations enabled, that Anchor click resolves placement immediately.

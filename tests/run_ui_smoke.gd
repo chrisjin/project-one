@@ -441,12 +441,27 @@ func _run() -> void:
 		"random mode removes empty-cell BoardPiece shortcuts that would choose a destination"
 	)
 	var random_candidates: Dictionary = {}
+	var random_candidate_actions: Array = []
 	for action in game.legal_actions:
 		if action.kind == GameplayAction.Kind.PLACE_BOARD_PIECE \
 				and action.main_anchor_id == 1 \
 				and action.board_piece_type == RuleTypes.BoardPieceType.ORTHOGONAL:
 			random_candidates[action.cell] = true
+			random_candidate_actions.append(action)
 	_assert_true(random_candidates.size() > 1, "random placement test has multiple engine-approved destinations")
+	game._random_placement_rng.seed = 24680
+	var randomized_ai_action = game._randomize_ai_board_piece_destination(random_candidate_actions[0])
+	var ignored_ai_destination_action = random_candidate_actions[0]
+	for candidate_action in random_candidate_actions:
+		if candidate_action.cell != randomized_ai_action.cell:
+			ignored_ai_destination_action = candidate_action
+			break
+	game._random_placement_rng.seed = 24680
+	var repeated_randomized_ai_action = game._randomize_ai_board_piece_destination(ignored_ai_destination_action)
+	_assert_equal(repeated_randomized_ai_action.cell, randomized_ai_action.cell, "AI random placement ignores the destination chosen by minimax")
+	_assert_true(repeated_randomized_ai_action.cell != ignored_ai_destination_action.cell, "AI is forced away from its chosen placement cell when random selection differs")
+	_assert_equal(repeated_randomized_ai_action.main_anchor_id, ignored_ai_destination_action.main_anchor_id, "AI random placement preserves its chosen Main Anchor")
+	_assert_equal(repeated_randomized_ai_action.board_piece_type, ignored_ai_destination_action.board_piece_type, "AI random placement preserves its chosen BoardPiece type")
 	game._random_placement_rng.seed = 12345
 	game._on_placement_requested(RuleTypes.BoardPieceType.ORTHOGONAL)
 	_assert_true(game.legal_main_anchor_ids.has(1), "random placement still asks the player to choose a physical Main Anchor")
@@ -507,6 +522,7 @@ func _run() -> void:
 	game._show_match_setup()
 	random_placement_toggle.set_pressed_no_signal(false)
 	random_placement_toggle.toggled.emit(false)
+	_assert_true(game._randomize_ai_board_piece_destination(ignored_ai_destination_action) == ignored_ai_destination_action, "disabled mode preserves the AI's exact placement action")
 	_find_button(hud._match_setup_overlay, "Human vs AI  •  Play as Black").pressed.emit()
 	_assert_false(game.random_board_piece_placement_enabled, "random placement can be toggled off for a later match")
 	_assert_equal(game.match_mode, DebugController.MatchMode.HUMAN_VS_AI, "Human vs AI menu selection configures the match")
