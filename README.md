@@ -1,12 +1,26 @@
 # Anchor Board Tactics
 
-A grid-based, turn-based tactical game built in Godot and GDScript. Two players build Anchor networks, deploy Orthogonal and Diagonal BoardPieces, and fight for survival through line attacks, supply cuts, and encirclement.
+A grid-based, turn-based tactical game exploring a different path to a Go-like endgame. The aim is for demanding battles over vulnerable pieces to gradually produce resilient formations, shifting the struggle toward expansion and consolidation. Victory is decided by the BoardPieces that survive on the board.
 
-The current project is a playable local prototype with a 3D debug board, human and AI match modes, and a presentation-free gameplay simulation. The Godot project name is `ProjectOne`.
+Built in Godot and GDScript, the current project is a playable local prototype with a 3D debug board, human and AI match modes, and a presentation-free gameplay simulation. The Godot project name is `ProjectOne`.
 
 ![A mid-game position on the 7×7 board, showing Anchors, O and D BoardPieces, HP labels, protection shields, and attack arrows.](docs/images/anchor-board-tactics.png)
 
 *The debug board during play. Circles are Anchors, squares are O BoardPieces, and diamonds are D BoardPieces. Labels show entity IDs and HP.*
+
+## Design Vision: A Different Path to a Go-like Endgame
+
+The original design inspiration comes from Go's endgame, particularly ancient Chinese Go, the counting of surviving stones, and the historical **还棋头** (*huan qi tou*) scoring tradition. The central experiment is to see whether a different set of rules can naturally produce a similar experience: both players gradually establish formations that are extremely difficult to destroy, and the outcome comes down to how many pieces survive.
+
+In the opening and middle game, scattered BoardPieces and exposed Anchors can demand careful tactical calculation. Players fight for positions, defend their own Anchors, attack enemy Anchors, block firing lines, and cut supply or protection networks. With few established defenses, a single broken connection can turn a promising position into a collapse.
+
+As the board develops, mutually supporting Anchor networks can make formations much more durable. Mature BoardPieces with valid Secondary Anchor protection can survive at 0 HP as PieceSpirits. These pieces keep occupying space, supporting friendly connectivity, and blocking attack rays, allowing defensive lines to become difficult to dismantle. Their resilience depends on their Main Anchors, supply paths, and protection relationships: destroying an Anchor or breaking a critical connection can still bring the structure down. Durability emerges from the same rules that make an isolated piece vulnerable.
+
+The hoped-for payoff is the moment a hard-earned defensive structure becomes reliable enough that its player can stop recalculating every individual threat. Attention can shift toward preserving that foundation, extending into remaining space, exploiting weak points, and gradually securing an advantage in surviving BoardPieces. Like consolidating a position in Go's endgame, progress can become incremental as more of the board settles into robust formations.
+
+Scoring gives that progression its purpose. The objective is to finish with more surviving BoardPieces; eliminating every enemy piece or destroying every enemy Anchor is unnecessary. After two consecutive passes, each legally surviving PieceSpirit counts just as much as an ordinary surviving BoardPiece, while Anchors score nothing. The final formation of the board determines the result, and kills carry no separate scoring reward.
+
+The connection to Go is experiential rather than mechanical. Go's living groups depend on liberties, eyes, and connections; Anchor Board Tactics seeks a comparable sense of stability through combat, Anchor dependency, supply, and layered protection. It does not reproduce Go's rules, implement the historical *huan qi tou* scoring adjustment, or equate dual-Anchor protection with two-eye life. This transition from tactical uncertainty to structural stability is an intended emergent experience. There is no special endgame phase, no promise that every match reaches a settled equilibrium, and no permanent immunity for protected formations.
 
 ## Run the game
 
@@ -60,6 +74,8 @@ The [Core Rules](docs/anchor_core_rules_en.md) are the authoritative specificati
 - BoardPieces may be deployed on any passable empty cell with a valid Main Anchor binding. Anchors are deployed in the inner **B2–F6** area.
 - The game ends after **two consecutive passes**. Each surviving BoardPiece, including a legal PieceSpirit, scores **1 point**. Anchors score **0**. Higher score wins; equal scores draw, with no komi.
 
+This rewards building and preserving a lasting position. Attacks and captures help shape that position, but the surviving BoardPiece count is the measure of success.
+
 ### Entities
 
 Anchors are structural entities, separate from BoardPieces.
@@ -93,7 +109,7 @@ A new BoardPiece immediately occupies its cell and participates in connectivity,
 
 ### Main Anchors, supply, and protection
 
-Every BoardPiece permanently binds to **one physical Main Anchor** when deployed. Moving that Anchor or changing its Cluster never changes the binding. Destroying the Main Anchor immediately removes every BoardPiece bound to it.
+Every BoardPiece permanently binds to **one physical Main Anchor** when deployed. Moving that Anchor or changing its Cluster never changes the binding. Destroying the Main Anchor immediately removes every BoardPiece bound to it. Defending an Anchor therefore protects an investment in several pieces, while an exposed Main Anchor gives an opponent a potential point of collapse.
 
 Two connections have different jobs:
 
@@ -102,9 +118,13 @@ Two connections have different jobs:
 | **Supply Connection** | Friendly entities and passable empty cells, reaching the specific Main Anchor | Required for survival. Losing supply immediately removes the BoardPiece. |
 | **Unit-Chain Connection** | A continuous chain of friendly entities, reaching the specific Main Anchor | Reduces incoming damage by **1**. Empty cells cannot carry this connection. |
 
+Preserving these paths lets players invest in a lasting formation; cutting them gives an opponent a way to dismantle it. Even a protected BoardPiece still depends on supply to its own Main Anchor.
+
 Orthogonally adjacent friendly Anchors form an **Anchor Cluster**. Physical binding capacities add together, but the Cluster counts as one protection source.
 
-A mature BoardPiece with a living Main Anchor and valid supply can survive at 0 HP if a friendly-unit chain also reaches a **different Anchor Cluster containing an active Anchor**. It becomes a **PieceSpirit**, retaining its ID, owner, cell, Main Anchor binding, and original O/D type. PieceSpirits cannot attack, move, or be targeted; they block both players' attack rays. Losing the required protection removes them immediately, including when Main and Secondary Clusters merge.
+A mature BoardPiece with a living Main Anchor and valid supply can survive at 0 HP if a friendly-unit chain also reaches an **Anchor Cluster distinct from its Main Anchor Cluster and containing an active Anchor**. It becomes a **PieceSpirit**, retaining its ID, owner, cell, Main Anchor binding, and original O/D type. PieceSpirits cannot attack, move, or be targeted; they block both players' attack rays. Losing the required protection removes them immediately, including when Main and Secondary Clusters merge.
+
+This is a bridge from tactical survival to structural stability: damage can silence a BoardPiece without removing its occupation of space or its scoring value, provided its support remains intact.
 
 ### Attacks and encirclement
 
